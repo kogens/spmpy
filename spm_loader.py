@@ -7,6 +7,7 @@ from pathlib import Path
 
 class SPMData:
     def __init__(self, path: str | PathLike):
+        """ Class that represents an SPM file with images and metadata """
         self.path = Path(path)
         self.metadata = None
         self.images = None
@@ -15,13 +16,13 @@ class SPMData:
             self.load_spm(self.path)
 
     def load_spm(self, path: str | PathLike):
-        # Load
+        """ Load an SPM file and extract images and metadata """
         with open(path, 'rb') as f:
             file_bytes = f.read()
 
-        metadata_lines = extract_metadata(file_bytes)
-        sections = sections_from_metadata(metadata_lines)
-        image_sections = {k: v for k, v in sections.items() if k.startswith('Ciao image')}
+        metadata_lines = extract_metadata_lines(file_bytes)
+        self.metadata = interpret_metadata(metadata_lines)
+        image_sections = {k: v for k, v in self.metadata.items() if k.startswith('Ciao image')}
 
         self.images = {}
         for i, ciao_image in enumerate(image_sections.values()):
@@ -51,14 +52,17 @@ class SPMData:
             self.images[f'Ciao image {i + 1}'] = image
 
 
-def extract_metadata(spm_bytestring: bytes) -> list[str]:
+def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
+    """ Extract the metadata section within "*File list" and "*File list end" and decode and cleanup the lines """
     file_lines = spm_bytestring.splitlines()
     start_index, end_index = find_file_list_indices(file_lines)
-    metadata = [x.decode('ANSI').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
-    return metadata
+    metadata_lines = [x.decode('ANSI').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
+
+    return metadata_lines
 
 
 def find_file_list_indices(file_lines: list[bytes]) -> tuple[int, int]:
+    """ Get indices of *File list and *File list end """
     start_index = -1
     end_index = -1
     for i, line in enumerate(file_lines):
@@ -70,15 +74,15 @@ def find_file_list_indices(file_lines: list[bytes]) -> tuple[int, int]:
     return start_index, end_index
 
 
-def sections_from_metadata(metadata: list[str]) -> dict[str | dict[str]]:
-    # Interpret sections within the metadata
-    sections = {}
+def interpret_metadata(metadata_lines: list[str]) -> dict[str | dict[str]]:
+    """ Interpret sections beginning with "*" within the metadata """
+    metadata = {}
     current_section = None
     n_image = 0
 
-    for line in metadata:
+    for line in metadata_lines:
         if line.startswith('*'):
-            # Line starting with * indicate a new section
+            # Lines starting with * indicate a new section
             current_section = line.strip('*')
 
             if current_section == 'Ciao image list':
@@ -87,14 +91,14 @@ def sections_from_metadata(metadata: list[str]) -> dict[str | dict[str]]:
                 n_image += 1
 
             # Initialize an empty dict for each section
-            sections[current_section] = {}
+            metadata[current_section] = {}
 
         elif current_section:
             # If line is not a section, add it as metadata in the current section
             key, value = line.split(':', 1)
-            sections[current_section][key] = value.strip()
+            metadata[current_section][key] = value.strip()
 
-    return sections
+    return metadata
 
 
 if __name__ == '__main__':
