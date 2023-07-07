@@ -41,7 +41,7 @@ class SPMData:
             # Extract image data from the raw bytestring of the full file
             bytedata = file_bytes[data_start: data_start + data_length]
 
-            # Decode the values, assuming "long" format
+            # Decode the values, assuming they are signed integers
             # https://docs.python.org/3/library/struct.html#format-characters
             pixel_values = struct.unpack(f'{n_pixels}i', bytedata)
 
@@ -56,7 +56,7 @@ def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
     """ Extract the metadata section within "*File list" and "*File list end" and decode and cleanup the lines """
     file_lines = spm_bytestring.splitlines()
     start_index, end_index = find_file_list_indices(file_lines)
-    metadata_lines = [x.decode('ANSI').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
+    metadata_lines = [x.decode('latin-1').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
 
     return metadata_lines
 
