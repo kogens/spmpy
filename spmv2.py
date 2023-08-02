@@ -5,6 +5,7 @@ from os import PathLike
 from pathlib import Path
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
@@ -17,7 +18,7 @@ class SPMFile:
     def __init__(self, path: str | PathLike):
         self.path = Path(path)
         self.metadata = None
-        self.images = {}
+        self.images = []
 
         self.load_spm()
 
@@ -28,29 +29,28 @@ class SPMFile:
 
         metadata_lines = extract_metadata_lines(file_bytes)
         self.metadata = interpret_metadata(metadata_lines)
-
         self.extract_ciao_images(file_bytes)
 
     def extract_ciao_images(self, file_bytes: bytes):
         """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
         image_sections = {k: v for k, v in self.metadata.items() if k.startswith('Ciao image')}
         for i, image_section in enumerate(image_sections.values()):
-            # TODO: Scale the pixel values to physical units
-            image = CIAOImage(image_section, file_bytes)
-            self.images[f'Ciao image {i}'] = image
+            self.images.append(CIAOImage(image_section, self.metadata, file_bytes))
 
 
 class CIAOImage:
     """ A CIAO image with metadata"""
 
-    def __init__(self, image_metadata: dict, file_bytes: bytes):
+    def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
+        self.metadata = image_metadata
+        self.full_metadata = full_metadata
+
         # Data offset and length refer to the bytes of the original file including metadata
         data_start = int(image_metadata['Data offset'])
         data_length = int(image_metadata['Data length'])
 
         # Calculate the number of pixels in order to decode the bytestring
-        samples_i = int(image_metadata['Samps/line'])
-        samples_j = int(image_metadata['Number of lines'])
+        samples_i, samples_j = int(image_metadata['Samps/line']), int(image_metadata['Number of lines'])
         n_pixels = samples_i * samples_j
 
         # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata.
@@ -66,6 +66,18 @@ class CIAOImage:
 
         # Reorder image into a numpy array. Note that i, j might have to be switched, not sure how to test that
         self.image = np.array(pixel_values).reshape(samples_i, samples_j)
+        self.image_physical = self.get_physical_units()
+
+    def get_physical_units(self):
+        z_scale = self.metadata['2:Z scale']
+        hard_value = z_scale.value
+        soft_scale_key = z_scale.sscale
+
+        soft_scale_value = self.full_metadata['Ciao scan list'][soft_scale_key].value
+        corrected_hard_scale = hard_value / 2 ** 32
+
+        corrected_image = self.image * corrected_hard_scale*soft_scale_value
+        return corrected_image
 
 
 @dataclass
@@ -150,7 +162,8 @@ def interpret_metadata(metadata_lines: list[str]):
 
             # Note: The "parameter" used as key is not always unique and can appear multiple times with different
             # group number. Usually not an issue for CIAO images, however.
-            metadata[current_section][ciaoparam.parameter] = ciaoparam
+            key = ciaoparam.parameter if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.parameter}'
+            metadata[current_section][key] = ciaoparam
         else:
             # Line is regular parameter, add to metadata of current seciton
             key, value = line.split(':', 1)
@@ -163,11 +176,11 @@ if __name__ == '__main__':
     # Load data as raw bytes and lines
     datapath = Path.home() / 'Data' / 'afm_testfile.spm'
     spm_data = SPMFile(datapath)
-    print(spm_data.metadata)
+    print(spm_data)
 
     # Plot images in SPM file
-    # fig, ax = plt.subplots(ncols=len(spm_data.images))
-    # for j, image in enumerate(spm_data.images.values()):
-    #     ax[j].imshow(image)
-    #
-    # plt.show()
+    fig, ax = plt.subplots(ncols=len(spm_data.images))
+    for j, image in enumerate(spm_data.images):
+        ax[j].imshow(image.image_physical)
+
+    plt.show()
