@@ -10,10 +10,10 @@ ignored.
 
 Further, after the label and its colon, you will see a single definition character of `V`, `C`, or `S`.
 
-- V means Value – a parameter that contains a double and a unit of measure, and some scaling
+- `V` means Value – a parameter that contains a double and a unit of measure, and some scaling
 definitions.
-- C means Scale – a parameter that is simply a scaled version of another.
-- S means Select – a parameter that describes some selection that has been made.
+- `C` means Scale – a parameter that is simply a scaled version of another.
+- `S` means Select – a parameter that describes some selection that has been made.
 
 
 ### Value parameters
