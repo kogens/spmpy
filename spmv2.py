@@ -1,8 +1,10 @@
 import re
+import struct
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 
+import numpy as np
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
@@ -15,7 +17,7 @@ class SPMFile:
     def __init__(self, path: str | PathLike):
         self.path = Path(path)
         self.metadata = None
-        self.images = None
+        self.images = {}
 
         self.load_spm()
 
@@ -25,12 +27,45 @@ class SPMFile:
             file_bytes = f.read()
 
         metadata_lines = extract_metadata_lines(file_bytes)
-        interpret_metadata(metadata_lines)
+        self.metadata = interpret_metadata(metadata_lines)
+
+        self.extract_ciao_images(file_bytes)
+
+    def extract_ciao_images(self, file_bytes: bytes):
+        """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
+        image_sections = {k: v for k, v in self.metadata.items() if k.startswith('Ciao image')}
+        for i, image_section in enumerate(image_sections.values()):
+            # TODO: Scale the pixel values to physical units
+            image = CIAOImage(image_section, file_bytes)
+            self.images[f'Ciao image {i}'] = image
 
 
 class CIAOImage:
     """ A CIAO image with metadata"""
-    ...
+
+    def __init__(self, image_metadata: dict, file_bytes: bytes):
+        # Data offset and length refer to the bytes of the original file including metadata
+        data_start = int(image_metadata['Data offset'])
+        data_length = int(image_metadata['Data length'])
+
+        # Calculate the number of pixels in order to decode the bytestring
+        samples_i = int(image_metadata['Samps/line'])
+        samples_j = int(image_metadata['Number of lines'])
+        n_pixels = samples_i * samples_j
+
+        # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata.
+        # bytes_per_pixel = int(image_section['Bytes/pixel'])
+        # n_pixels2 = data_length // bytes_per_pixel
+
+        # Extract image data from the raw bytestring of the full file
+        bytedata = file_bytes[data_start: data_start + data_length]
+
+        # Decode the byte values as signed 32-bit integers
+        # https://docs.python.org/3/library/struct.html#format-characters
+        pixel_values = struct.unpack(f'{n_pixels}i', bytedata)
+
+        # Reorder image into a numpy array. Note that i, j might have to be switched, not sure how to test that
+        self.image = np.array(pixel_values).reshape(samples_i, samples_j)
 
 
 @dataclass
@@ -95,7 +130,7 @@ def interpret_metadata(metadata_lines: list[str]):
     current_section = None
     n_image = 0
 
-    # Wa
+    # Walk through each line of metadata and extract sections and parameters
     for line in metadata_lines:
         if line.startswith('*'):
             # Lines starting with * indicate a new section
@@ -111,15 +146,17 @@ def interpret_metadata(metadata_lines: list[str]):
 
         elif line.startswith('@'):
             # Line is CIAO parameter, interpret and add to current section
-            parameter = CIAOParameter(line)
-            print(parameter)
+            ciaoparam = CIAOParameter(line)
 
+            # Note: The "parameter" used as key is not always unique and can appear multiple times with different
+            # group number. Usually not an issue for CIAO images, however.
+            metadata[current_section][ciaoparam.parameter] = ciaoparam
         else:
             # Line is regular parameter, add to metadata of current seciton
             key, value = line.split(':', 1)
             metadata[current_section][key] = value.strip()
 
-    return None
+    return metadata
 
 
 if __name__ == '__main__':
