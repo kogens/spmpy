@@ -1,11 +1,14 @@
-import numpy as np
+import re
 import struct
-import matplotlib.pyplot as plt
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 
-class SPMData:
+
+class SPMFile:
     def __init__(self, path: str | PathLike):
         """ Class that represents an SPM file with images and metadata """
         self.path = Path(path)
@@ -103,8 +106,8 @@ def interpret_metadata(metadata_lines: list[str]) -> dict[str | dict[str]]:
 
 if __name__ == '__main__':
     # Load data as raw bytes and lines
-    datapath = '20230524_003d_Si_(2,3).spm'
-    spm_data = SPMData(datapath)
+    datapath = Path.home() / 'Data' / 'afm_testfile.spm'
+    spm_data = SPMFile(datapath)
     print(spm_data.metadata)
 
     # Plot images in SPM file
