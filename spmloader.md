@@ -59,8 +59,9 @@ plt.show()
 
 
 ---
-# Excerpt from the official Nanoscope 8.10 User Guide
-Copy found at [NanoQAM](http://nanoqam.ca/wiki/lib/exe/fetch.php?media=nanoscope_software_8.10_user_guide-d_004-1025-000_.pdf)
+# Excerpts from the Nanoscope User Guide
+A copy of the Nanoscope 8.10 User Guide can be found at [NanoQAM](http://nanoqam.ca/wiki/lib/exe/fetch.php?media=nanoscope_software_8.10_user_guide-d_004-1025-000_.pdf).
+Specifically appendix A.3 and A.7 are of interest
 
 
 ## General Format for CIAO Parameter Objects
@@ -158,25 +159,4 @@ Group number   Parameter type
 \@2:Image Data: S [Height] "Height"
     ^^^^^^^^^^     ^^^^^^
     Parameter   Internal-designation
-```
-
-## Example lines
-```
-\@Sens. Zsens: V 33.97668 nm/V
-\@Sens. CurrentSens: V 10.00000 nA/V
-\@Sens. SECPMSens: V 100.0000 mV/V
-\@Sens. Xsensor: V 6551.668 nm/V
-\@Sens. Ysensor: V 6515.867 nm/V
-
-\@TR Mode: S [] "Disabled"
-\@VerticalGainControlList: S [] "Disabled"
-\@SCM Feedback: S [] ""
-\@2:HsdcChanCDataType: S [HsdcDataTypeOff] "Off"
-\@3:HsdcChanCDataType: S [HsdcDataTypeOff] "Off"
-\@2:HsdcChanDDataType: S [HsdcDataTypeOff] "Off"
-\@3:HsdcChanDDataType: S [HsdcDataTypeOff] "Off"
-\@2:HsdcTriggerChan: S [HsdcDataTypeHeight] "Height"
-\@3:HsdcTriggerChan: S [HsdcDataTypeHeight] "Height"
-\@2:SPMFeedbackList: S [SPMFb] "Amplitude"
-\@3:SPMFeedbackList: S [SPMFb] "Amplitude"
 ```
