@@ -191,12 +191,13 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
     return images
 
 
+# Define regex to identify numerical values and UnitRegistry for handling units.
+#
 NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/]+)?$')
 ureg = pint.UnitRegistry()
-ureg.define('LSB = 1')
+ureg.define('LSB = Least Significant Bit = 1')
 ureg.define('Arb = 1')
-ureg.define('º = degree')
-# ureg.define('~m=µm')
+ureg.define('º = deg = degree')
 
 
 def parse_parameter(parameter_string):
@@ -211,15 +212,15 @@ def parse_parameter(parameter_string):
         # Parameter is not numerical, return string
         return value_str
     elif match_numerical.group(2) is None:
+        # No unit detected, value is just number
         if '.' not in value_str:
-            # No decimal, conver to integer
+            # No decimal, convert to integer
             return int(value_str)
         else:
-            # Convert to float
+            # Decimal present, convert to float
             return float(value_str)
     else:
         # Value with unit
-        print(match_numerical.group(2))
         return ureg.Quantity(value_str)
 
 
