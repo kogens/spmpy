@@ -1,3 +1,46 @@
+# Load SPM files from Bruker AFM Microscopes
+Requires `numpy` and `pint` (for units), optionally `matplotlib` for plotting examples below
+```
+pip install numpy pint matplotlib
+```
+
+```python
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+from spmloader import SPMFile
+
+# Load spm file. The path can also just be a string.
+datapath = Path.home() / 'Data' / 'afm_testfile.spm'
+spm_data = SPMFile(datapath)
+
+print(spm_data)
+```
+
+An SPM file usually has more than one image, and can be accesed as an attribute with `spm_data.images`:
+print(spm_data.images)
+```python
+{'AmplitudeError': CIAO AFM image "Amplitude Error", shape: (128, 128), unit: millivolt * nanometer / volt,
+ 'Phase': CIAO AFM image "Phase", shape: (128, 128), unit: º,
+ 'ZSensor': CIAO AFM image "Height Sensor", shape: (128, 128), unit: nanometer}
+ ```
+
+The image data can be plottes like so
+```python
+# Plot images in SPM file
+fig, ax = plt.subplots(ncols=len(spm_data.images))
+for j, image in enumerate(spm_data.images.values()):
+    ax[j].imshow(image.image, extent=image.extent.magnitude)
+    ax[j].set_title(image.title)
+
+plt.tight_layout()
+plt.show()
+```
+
+
+
+
+---
 # Excerpt from the official Nanoscope 8.10 User Guide
 Copy found at [NanoQAM](http://nanoqam.ca/wiki/lib/exe/fetch.php?media=nanoscope_software_8.10_user_guide-d_004-1025-000_.pdf)
 

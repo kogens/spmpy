@@ -93,10 +93,13 @@ class CIAOImage:
         aspect_ratio = (max(self.raw_image.shape) / n_rows, max(self.raw_image.shape) / n_cols)
         scansize = full_metadata['Ciao scan list']['Scan Size']
 
-        pixel_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
-        pixel_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
+        px_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
+        px_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
 
-        return corrected_image, pixel_size_cols, pixel_size_rows
+        self.extent = [0, (n_cols - 1) * px_size_cols.magnitude, 0,
+                       (n_rows - 1) * px_size_rows.magnitude] * px_size_cols.units
+
+        return corrected_image, px_size_cols, px_size_rows
 
 
 @dataclass
@@ -191,10 +194,12 @@ def interpret_metadata(metadata_lines: list[str]):
 
 def extract_ciao_images(metadata: dict, file_bytes: bytes):
     """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
-    images = []
+    images = {}
     image_sections = {k: v for k, v in metadata.items() if k.startswith('Ciao image')}
-    for i, image_section in enumerate(image_sections.values()):
-        images.append(CIAOImage(image_section, metadata, file_bytes))
+    for i, image_metadata in enumerate(image_sections.values()):
+        image = CIAOImage(image_metadata, metadata, file_bytes)
+        key = image_metadata['2:Image Data'].internal_designation
+        images[key] = image
 
     return images
 
@@ -221,23 +226,3 @@ def parse_parameter(parameter_string):
     else:
         # Value with unit
         return UREG.Quantity(value_str)
-
-
-if __name__ == '__main__':
-    # Load data as raw bytes and lines
-    datapath1 = Path.home() / 'Data' / 'afm_testfile1.spm'
-    datapath2 = Path.home() / 'Data' / 'afm_testfile2.spm'
-    # spm_data1 = SPMFile(datapath1)
-    spm_data2 = SPMFile(datapath2)
-
-    print(spm_data2)
-    print(spm_data2.images[0])
-
-    # Plot images in SPM file
-    fig, ax = plt.subplots(ncols=len(spm_data2.images))
-    for j, image in enumerate(spm_data2.images):
-        ax[j].imshow(image.image)
-        ax[j].set_title(image.title)
-
-    plt.tight_layout()
-    plt.show()
