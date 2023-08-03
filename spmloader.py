@@ -6,6 +6,7 @@ from os import PathLike
 from pathlib import Path
 
 import numpy as np
+import pint
 from matplotlib import pyplot as plt
 
 # Regex for CIAO parameters (lines starting with \@ )
@@ -177,7 +178,7 @@ def interpret_metadata(metadata_lines: list[str]):
         else:
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
-            metadata[current_section][key] = value.strip()
+            metadata[current_section][key] = parse_parameter(value)
 
     return metadata
 
@@ -190,6 +191,30 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
         images.append(CIAOImage(image_section, metadata, file_bytes))
 
     return images
+
+
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\w\/]+)?$')
+ureg = pint.UnitRegistry()
+
+
+def parse_parameter(parameter_string):
+    """ Parse parameters into either int, float, string or physical quantity """
+    value_str = parameter_string.strip(' "')
+    match_numerical = NUMERICAL_REGEX.match(value_str)
+
+    if not match_numerical:
+        # Parameter is not numerical, return string
+        return value_str
+    elif match_numerical.group(2) is None:
+        if '.' not in value_str:
+            # No decimal, conver to integer
+            return int(value_str)
+        else:
+            # Convert to float
+            return float(value_str)
+    else:
+        # Value with unit
+        return ureg.Quantity(value_str)
 
 
 if __name__ == '__main__':
