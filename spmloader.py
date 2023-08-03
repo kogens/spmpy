@@ -29,8 +29,8 @@ class SPMFile:
         self.metadata, self.images = self.load_spm()
         self.date = datetime.strptime(self.metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
-    def __str__(self):
-        titles = [x.title for x in self.images]
+    def __repr__(self):
+        titles = [x for x in self.images.keys()]
         return f'SPM file: "{self.path.name}", {self.date}. Images: {titles}'
 
     def load_spm(self):
@@ -70,6 +70,23 @@ class CIAOImage:
         self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
         self.image, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
         self.title = self.metadata['2:Image Data'].external_designation
+
+    def __array__(self):
+        # Array representation is just the numpy array
+        return self.image.magnitude
+
+    # def __add__(self, other):
+    #     return self.image + other.image
+    #
+    # def __sub__(self, other):
+    #     return self.image + other.image
+
+    def __mul__(self, other):
+        # Allow multiplication with numbers
+        return self.image * other
+
+    def __getitem__(self, key):
+        return self.metadata[key]
 
     def __repr__(self):
         reprstr = f'CIAO {self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'

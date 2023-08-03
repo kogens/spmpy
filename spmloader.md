@@ -1,36 +1,54 @@
 # Load SPM files from Bruker AFM Microscopes
-Requires `numpy` and `pint` (for units), optionally `matplotlib` for plotting examples below
+Requires `numpy` and [`pint`](https://pint.readthedocs.io/) (for units), optionally `matplotlib` for plotting examples below
 ```
 pip install numpy pint matplotlib
 ```
 
-```python
-from pathlib import Path
-import matplotlib.pyplot as plt
+Place the `spmloader.py` file with your script and import the `SPMFile` class and pass a 
 
+```python
 from spmloader import SPMFile
 
-# Load spm file. The path can also just be a string.
-datapath = Path.home() / 'Data' / 'afm_testfile.spm'
-spm_data = SPMFile(datapath)
-
+# Pass a path to SPMFile to load the data
+spm_data = SPMFile('afm_testfile.spm')
 print(spm_data)
 ```
+This should give something like::
+```
+SPM file: "afm_testfile.spm", 2023-05-24 10:27:35. Images: ['ZSensor', 'AmplitudeError', 'Phase']`
+```
 
-An SPM file usually has more than one image, and can be accesed as an attribute with `spm_data.images`:
-print(spm_data.images)
-```python
+An SPM file usually has more than one image and can be accessed as an attribute with `spm_data.images`:
+```
 {'AmplitudeError': CIAO AFM image "Amplitude Error", shape: (128, 128), unit: millivolt * nanometer / volt,
  'Phase': CIAO AFM image "Phase", shape: (128, 128), unit: º,
  'ZSensor': CIAO AFM image "Height Sensor", shape: (128, 128), unit: nanometer}
  ```
 
-The image data can be plottes like so
+To extract a single image, e.g. `ZSensor` for height data:
+```python
+import matplotlib.pyplot as plt
+
+height_image = spm_data.images['ZSensor']
+plt.imshow(height_image)
+plt.show()
+```
+
+This will show the image with pixels on x and y-axis. For `imshow()` you can set an `extent` to show the physical units.
+Either calculate the extent with `image.px_size_rows` and `image.px_size_cols` or use the built in `image.extent` value.
+Pyplot doesn't like units, so get the raw values with `image.extent.magnitude`
+```python
+plt.imshow(height_image, extent=height_image.extent.magnitude)
+plt.show()
+```
+
+All images found in the SPM file, such as phase and amplitude error images
+can be plotted like so
 ```python
 # Plot images in SPM file
 fig, ax = plt.subplots(ncols=len(spm_data.images))
 for j, image in enumerate(spm_data.images.values()):
-    ax[j].imshow(image.image, extent=image.extent.magnitude)
+    ax[j].imshow(image, extent=image.extent.magnitude)
     ax[j].set_title(image.title)
 
 plt.tight_layout()
