@@ -13,6 +13,13 @@ from matplotlib import pyplot as plt
 CIAO_REGEX = re.compile(
     r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s?(?P<hardval>.*)$')
 
+# Define regex to identify numerical values and UnitRegistry for handling units.
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/]+)?$')
+UREG = pint.UnitRegistry()
+UREG.define('LSB = Least Significant Bit = 1')
+UREG.define('Arb = 1')
+UREG.define('º = deg = degree')
+
 
 class SPMFile:
     """ Representation of an entire SPM file with images and metadata """
@@ -48,25 +55,25 @@ class CIAOImage:
         data_start = int(image_metadata['Data offset'])
         data_length = int(image_metadata['Data length'])
 
-        # Calculate the number of pixels in order to decode the bytestring
+        # Calculate the number of pixels in order to decode the bytestring.
+        # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata 2ith "Bytes/pixel".
         n_rows, n_cols = int(image_metadata['Number of lines']), int(image_metadata['Samps/line'])
         n_pixels = n_cols * n_rows
 
-        # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata.
-        # bytes_per_pixel = int(image_section['Bytes/pixel'])
-        # n_pixels2 = data_length // bytes_per_pixel
-
-        # Extract image data from the raw bytestring of the full file
-        bytedata = file_bytes[data_start: data_start + data_length]
-
-        # Decode the byte values as signed 32-bit integers (despite documentation saying 16-bit signed int)
+        # Extract relevant image data from the raw bytestring of the full file and decode the byte values
+        # as signed 32-bit integers (despite documentation saying 16-bit signed int).
         # https://docs.python.org/3/library/struct.html#format-characters
+        bytedata = file_bytes[data_start: data_start + data_length]
         pixel_values = struct.unpack(f'{n_pixels}i', bytedata)
 
-        # Reorder image into a numpy array. Note that i, j might have to be switched, not sure how to test that
-        self.image = np.array(pixel_values).reshape(n_rows, n_cols)
-        self.image_physical, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
-        self.title = self.metadata['2:Image Data'].internal_designation
+        # Reorder image into a numpy array and calculate the physical value of each pixel.
+        self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
+        self.image, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
+        self.title = self.metadata['2:Image Data'].external_designation
+
+    def __repr__(self):
+        reprstr = f'CIAO {self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'
+        return reprstr
 
     def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
@@ -74,15 +81,16 @@ class CIAOImage:
         soft_scale_key = z_scale.sscale
         soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
 
-        # Note: Documentation says divide by 2^16, but 2^32 gives proper results...?
+        # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
+        # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
+        # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
         corrected_hard_scale = hard_value / 2 ** 32
-
-        corrected_image = self.image * corrected_hard_scale * soft_scale_value
+        corrected_image = self.raw_image * corrected_hard_scale * soft_scale_value
 
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
-        n_rows, n_cols = self.image.shape
-        aspect_ratio = (max(self.image.shape) / n_rows, max(self.image.shape) / n_cols)
+        n_rows, n_cols = self.raw_image.shape
+        aspect_ratio = (max(self.raw_image.shape) / n_rows, max(self.raw_image.shape) / n_cols)
         scansize = full_metadata['Ciao scan list']['Scan Size']
 
         pixel_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
@@ -191,15 +199,6 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
     return images
 
 
-# Define regex to identify numerical values and UnitRegistry for handling units.
-#
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/]+)?$')
-ureg = pint.UnitRegistry()
-ureg.define('LSB = Least Significant Bit = 1')
-ureg.define('Arb = 1')
-ureg.define('º = deg = degree')
-
-
 def parse_parameter(parameter_string):
     """ Parse parameters into either int, float, string or physical quantity """
     if not parameter_string:
@@ -221,7 +220,7 @@ def parse_parameter(parameter_string):
             return float(value_str)
     else:
         # Value with unit
-        return ureg.Quantity(value_str)
+        return UREG.Quantity(value_str)
 
 
 if __name__ == '__main__':
@@ -232,11 +231,12 @@ if __name__ == '__main__':
     spm_data2 = SPMFile(datapath2)
 
     print(spm_data2)
+    print(spm_data2.images[0])
 
     # Plot images in SPM file
     fig, ax = plt.subplots(ncols=len(spm_data2.images))
     for j, image in enumerate(spm_data2.images):
-        ax[j].imshow(image.image_physical)
+        ax[j].imshow(image.image)
         ax[j].set_title(image.title)
 
     plt.tight_layout()
