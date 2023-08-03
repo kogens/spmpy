@@ -1,10 +1,13 @@
 # Load SPM files from Bruker AFM Microscopes
+## Setup
 Requires `numpy` and [`pint`](https://pint.readthedocs.io/) (for units), optionally `matplotlib` for plotting examples below
 ```
 pip install numpy pint matplotlib
 ```
 
 Place the `spmloader.py` file with your script and import the `SPMFile` class.
+
+## Loading SPM files
 The SPM file can be loaded by passing a file path directly to `SPMFile` as such:
 
 ```python
@@ -20,6 +23,11 @@ This should give something like::
 SPM file: "afm_testfile.spm", 2023-05-24 10:27:35. Images: ['ZSensor', 'AmplitudeError', 'Phase']`
 ```
 
+All the metadata is accessible as `spm_data.metata` where it is organized in the sections starting with "*" in the 
+SPM file, or you can access any parameter directly by treating `spm_data` as a dict, e.g. `spm_data['Scan Size']` or 
+`spm_data['Sens. ZsensSen']`.
+
+### Images in the SPM file
 An SPM file usually has more than one image and can be accessed as an attribute with `spm_data.images`:
 ```
 {'AmplitudeError': CIAO AFM image "Amplitude Error", shape: (128, 128), unit: millivolt * nanometer / volt,
