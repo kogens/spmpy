@@ -14,6 +14,7 @@ from spmloader import SPMFile
 spm_data = SPMFile('afm_testfile.spm')
 print(spm_data)
 ```
+
 This should give something like::
 ```
 SPM file: "afm_testfile.spm", 2023-05-24 10:27:35. Images: ['ZSensor', 'AmplitudeError', 'Phase']`
