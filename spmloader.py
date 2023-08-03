@@ -191,14 +191,16 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
 
 if __name__ == '__main__':
     # Load data as raw bytes and lines
-    datapath = Path.home() / 'Data' / 'Si test.0_00000 4 lines.spm'
-    spm_data = SPMFile(datapath)
+    datapath1 = Path.home() / 'Data' / 'afm_testfile1.spm'
+    datapath2 = Path.home() / 'Data' / 'afm_testfile2.spm'
+    spm_data1 = SPMFile(datapath1)
+    spm_data2 = SPMFile(datapath2)
 
-    print(spm_data)
+    print(spm_data1)
 
     # Plot images in SPM file
-    fig, ax = plt.subplots(ncols=len(spm_data.images))
-    for j, image in enumerate(spm_data.images):
+    fig, ax = plt.subplots(ncols=len(spm_data1.images))
+    for j, image in enumerate(spm_data1.images):
         ax[j].imshow(image.image_physical)
 
     plt.show()
