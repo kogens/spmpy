@@ -83,7 +83,7 @@ class CIAOImage:
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
         n_rows, n_cols = self.image.shape
         aspect_ratio = (max(self.image.shape) / n_rows, max(self.image.shape) / n_cols)
-        scansize = int(full_metadata['Ciao scan list']['Scan Size'].split()[0])
+        scansize = full_metadata['Ciao scan list']['Scan Size']
 
         pixel_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
         pixel_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
@@ -99,7 +99,6 @@ class CIAOParameter:
     value: float | str
 
     group: int = None
-    unit: str = ''
     hscale: float = None
     sscale: str = None
     internal_designation: str = None
@@ -114,15 +113,14 @@ class CIAOParameter:
 
             if self.ptype in ['V', 'C']:
                 # "Value" or "Scale" parameter
-                self.sscale = match.group('softscale')
-                self.hscale = float(match.group('hardscale').split()[0]) if match.group('hardscale') else None
-                self.value = float(match.group('hardval').split()[0]) if match.group('hardval') else None
-                self.unit = match.group('hardval').split()[1] if len(match.group('hardval').split()) > 1 else None
+                self.sscale = parse_parameter(match.group('softscale'))
+                self.hscale = parse_parameter(match.group('hardscale')) if match.group('hardscale') else None
+                self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
             elif self.ptype == 'S':
                 # "Select" parameter
-                self.internal_designation = match.group('softscale').strip('"')
-                self.external_designation = match.group('hardval').strip('"')
-                self.value = match.group('hardval').split()[0].strip('"') if match.group('hardval') else None
+                self.internal_designation = parse_parameter(match.group('softscale'))
+                self.external_designation = parse_parameter(match.group('hardval'))
+                self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
@@ -193,12 +191,19 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
     return images
 
 
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\w\/]+)?$')
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/]+)?$')
 ureg = pint.UnitRegistry()
+ureg.define('LSB = 1')
+ureg.define('Arb = 1')
+ureg.define('º = degree')
+# ureg.define('~m=µm')
 
 
 def parse_parameter(parameter_string):
     """ Parse parameters into either int, float, string or physical quantity """
+    if not parameter_string:
+        return parameter_string
+
     value_str = parameter_string.strip(' "')
     match_numerical = NUMERICAL_REGEX.match(value_str)
 
@@ -214,6 +219,7 @@ def parse_parameter(parameter_string):
             return float(value_str)
     else:
         # Value with unit
+        print(match_numerical.group(2))
         return ureg.Quantity(value_str)
 
 
