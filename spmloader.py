@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import pint
-from matplotlib import pyplot as plt
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
@@ -27,11 +26,15 @@ class SPMFile:
     def __init__(self, path: str | PathLike):
         self.path = Path(path)
         self.metadata, self.images = self.load_spm()
+        self._flat_metadata = {k: v for inner_dict in self.metadata.values() for k, v in inner_dict.items()}
         self.date = datetime.strptime(self.metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
     def __repr__(self):
         titles = [x for x in self.images.keys()]
         return f'SPM file: "{self.path.name}", {self.date}. Images: {titles}'
+
+    def __getitem__(self, item):
+        return self._flat_metadata[item]
 
     def load_spm(self):
         """ Load an SPM file and extract images and metadata """
@@ -133,6 +136,7 @@ class CIAOParameter:
     external_designation: str = None
 
     def __init__(self, ciao_string: str):
+        self.ciao_string = ciao_string
         match = CIAO_REGEX.match(ciao_string)
         if match:
             self.group = int(match.group('group')) if match.group('group') else None
@@ -152,14 +156,40 @@ class CIAOParameter:
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
+    def __str__(self):
+        return f'CIAO parameter: {self.value}'
+
+    def __mul__(self, other):
+        if isinstance(other, CIAOParameter):
+            return self.value * other.value
+        else:
+            return self.value * other
+
+    def __truediv__(self, other):
+        if isinstance(other, CIAOParameter):
+            return self.value / other.value
+        else:
+            return self.value / other
+
+    def __add__(self, other):
+        if isinstance(other, CIAOParameter):
+            return self.value + other.value
+        else:
+            return self.value + other
+
+    def __sub__(self, other):
+        if isinstance(other, CIAOParameter):
+            return self.value - other.value
+        else:
+            return self.value - other
+
 
 def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
     """ Extract the metadata section between "*File list" and "*File list end" and decode and cleanup the lines """
     # Extract lines as list of bytestrings
     file_lines = spm_bytestring.splitlines()
 
-    start_index = 0
-    end_index = 0
+    start_index, end_index = None, None
     for i, line in enumerate(file_lines):
         if line.strip() == b'\\*File list':
             start_index = i
@@ -167,10 +197,12 @@ def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
             end_index = i
             break
 
-    # Extract the identified lines between start and end. Decode strings and strip unwanted characters.
-    metadata_lines = [x.decode('latin-1').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
-
-    return metadata_lines
+    if start_index is not None and end_index is not None:
+        # Extract the identified lines between start and end. Decode strings and strip unwanted characters.
+        metadata_lines = [x.decode('latin-1').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
+        return metadata_lines
+    else:
+        raise ValueError('Beginning or end of "\\*File list" missing, cannot extract metadata')
 
 
 def interpret_metadata(metadata_lines: list[str]):
@@ -221,7 +253,7 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes):
     return images
 
 
-def parse_parameter(parameter_string):
+def parse_parameter(parameter_string) -> str | int | float | pint.Quantity:
     """ Parse parameters into either int, float, string or physical quantity """
     if not parameter_string:
         return parameter_string
