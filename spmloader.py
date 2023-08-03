@@ -1,6 +1,7 @@
 import re
 import struct
 from dataclasses import dataclass
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
 
@@ -17,10 +18,12 @@ class SPMFile:
 
     def __init__(self, path: str | PathLike):
         self.path = Path(path)
-        self.metadata = None
-        self.images = []
+        self.metadata, self.images = self.load_spm()
+        self.date = datetime.strptime(self.metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
-        self.load_spm()
+    def __str__(self):
+        titles = [x.title for x in self.images]
+        return f'SPM file: "{self.path.name}", {self.date}. Images: {titles}'
 
     def load_spm(self):
         """ Load an SPM file and extract images and metadata """
@@ -28,14 +31,10 @@ class SPMFile:
             file_bytes = f.read()
 
         metadata_lines = extract_metadata_lines(file_bytes)
-        self.metadata = interpret_metadata(metadata_lines)
-        self.extract_ciao_images(file_bytes)
+        metadata = interpret_metadata(metadata_lines)
+        images = extract_ciao_images(metadata, file_bytes)
 
-    def extract_ciao_images(self, file_bytes: bytes):
-        """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
-        image_sections = {k: v for k, v in self.metadata.items() if k.startswith('Ciao image')}
-        for i, image_section in enumerate(image_sections.values()):
-            self.images.append(CIAOImage(image_section, self.metadata, file_bytes))
+        return metadata, images
 
 
 class CIAOImage:
@@ -65,7 +64,8 @@ class CIAOImage:
 
         # Reorder image into a numpy array. Note that i, j might have to be switched, not sure how to test that
         self.image = np.array(pixel_values).reshape(n_rows, n_cols)
-        self.image_physical = self.get_physical_units(full_metadata)
+        self.image_physical, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
+        self.title = self.metadata['2:Image Data'].internal_designation
 
     def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
@@ -79,11 +79,12 @@ class CIAOImage:
         corrected_image = self.image * corrected_hard_scale * soft_scale_value
 
         # Calculate pixel sizes in physical units
+        # TODO: Pixel size is off when image is not squared. Can possibly be corrected with "Aspect Ratio" parameter
         scansize = int(full_metadata['Ciao scan list']['Scan Size'].split()[0])
-        pixel_size_x = scansize/(int(full_metadata['Ciao scan list']['Samps/line'])-1)
-        pixel_size_y = scansize/(int(full_metadata['Ciao scan list']['Lines'])-1)
+        pixel_size_x = scansize / (int(full_metadata['Ciao scan list']['Samps/line']) - 1)
+        pixel_size_y = scansize / (int(full_metadata['Ciao scan list']['Lines']) - 1)
 
-        return corrected_image
+        return corrected_image, pixel_size_x, pixel_size_y
 
 
 @dataclass
@@ -154,12 +155,12 @@ def interpret_metadata(metadata_lines: list[str]):
             # Lines starting with * indicate a new section
             current_section = line.strip('*')
 
+            # "Ciao image list" appears multiple times, so we give them a number
             if current_section == 'Ciao image list':
-                # "Ciao image list" appears multiple times so we give them a number
                 current_section = f'Ciao image list {n_image}'
                 n_image += 1
 
-            # Initialize an empty dict for each section
+            # Initialize an empty dict to contain metadata for each section
             metadata[current_section] = {}
 
         elif line.startswith('@'):
@@ -171,17 +172,28 @@ def interpret_metadata(metadata_lines: list[str]):
             key = ciaoparam.parameter if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.parameter}'
             metadata[current_section][key] = ciaoparam
         else:
-            # Line is regular parameter, add to metadata of current seciton
+            # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
             metadata[current_section][key] = value.strip()
 
     return metadata
 
 
+def extract_ciao_images(metadata: dict, file_bytes: bytes):
+    """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
+    images = []
+    image_sections = {k: v for k, v in metadata.items() if k.startswith('Ciao image')}
+    for i, image_section in enumerate(image_sections.values()):
+        images.append(CIAOImage(image_section, metadata, file_bytes))
+
+    return images
+
+
 if __name__ == '__main__':
     # Load data as raw bytes and lines
-    datapath = Path.home() / 'Data' / 'afm_testfile.spm'
+    datapath = Path.home() / 'Data' / 'Si test.0_00000 4 lines.spm'
     spm_data = SPMFile(datapath)
+
     print(spm_data)
 
     # Plot images in SPM file
