@@ -4,7 +4,8 @@ Requires `numpy` and [`pint`](https://pint.readthedocs.io/) (for units), optiona
 pip install numpy pint matplotlib
 ```
 
-Place the `spmloader.py` file with your script and import the `SPMFile` class and pass a 
+Place the `spmloader.py` file with your script and import the `SPMFile` class.
+The SPM file can be loaded by passing a file path directly to `SPMFile` as such:
 
 ```python
 from spmloader import SPMFile
