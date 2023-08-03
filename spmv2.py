@@ -43,15 +43,14 @@ class CIAOImage:
 
     def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
         self.metadata = image_metadata
-        self.full_metadata = full_metadata
 
         # Data offset and length refer to the bytes of the original file including metadata
         data_start = int(image_metadata['Data offset'])
         data_length = int(image_metadata['Data length'])
 
         # Calculate the number of pixels in order to decode the bytestring
-        samples_i, samples_j = int(image_metadata['Samps/line']), int(image_metadata['Number of lines'])
-        n_pixels = samples_i * samples_j
+        n_rows, n_cols = int(image_metadata['Number of lines']), int(image_metadata['Samps/line'])
+        n_pixels = n_cols * n_rows
 
         # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata.
         # bytes_per_pixel = int(image_section['Bytes/pixel'])
@@ -60,23 +59,30 @@ class CIAOImage:
         # Extract image data from the raw bytestring of the full file
         bytedata = file_bytes[data_start: data_start + data_length]
 
-        # Decode the byte values as signed 32-bit integers
+        # Decode the byte values as signed 32-bit integers (despite documentation saying 16-bit signed int)
         # https://docs.python.org/3/library/struct.html#format-characters
         pixel_values = struct.unpack(f'{n_pixels}i', bytedata)
 
         # Reorder image into a numpy array. Note that i, j might have to be switched, not sure how to test that
-        self.image = np.array(pixel_values).reshape(samples_i, samples_j)
-        self.image_physical = self.get_physical_units()
+        self.image = np.array(pixel_values).reshape(n_rows, n_cols)
+        self.image_physical = self.get_physical_units(full_metadata)
 
-    def get_physical_units(self):
+    def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
         hard_value = z_scale.value
         soft_scale_key = z_scale.sscale
+        soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
 
-        soft_scale_value = self.full_metadata['Ciao scan list'][soft_scale_key].value
+        # Note: Documentation says divide by 2^16, but 2^32 gives proper results...?
         corrected_hard_scale = hard_value / 2 ** 32
 
-        corrected_image = self.image * corrected_hard_scale*soft_scale_value
+        corrected_image = self.image * corrected_hard_scale * soft_scale_value
+
+        # Calculate pixel sizes in physical units
+        scansize = int(full_metadata['Ciao scan list']['Scan Size'].split()[0])
+        pixel_size_x = scansize/(int(full_metadata['Ciao scan list']['Samps/line'])-1)
+        pixel_size_y = scansize/(int(full_metadata['Ciao scan list']['Lines'])-1)
+
         return corrected_image
 
 
