@@ -27,13 +27,18 @@ All the metadata is accessible as `spm_data.metata` where it is organized in the
 SPM file, or you can access any parameter directly by treating `spm_data` as a dict, e.g. `spm_data['Scan Size']` or 
 `spm_data['Sens. ZsensSen']`.
 
+Each parameter in the metadata is automatically interpreted into relevant datatypes (numbers, strings etc). 
+Any parameter with units is represented as a `Quantity` from the [Pint](https://pint.readthedocs.io/) library.
+
+
+
 ### Images in the SPM file
-An SPM file usually has more than one image and can be accessed as an attribute with `spm_data.images`:
+An SPM file usually has more than one image and can be accessed as `spm_data.images`:
 ```
 {'AmplitudeError': CIAO AFM image "Amplitude Error", shape: (128, 128), unit: millivolt * nanometer / volt,
  'Phase': CIAO AFM image "Phase", shape: (128, 128), unit: º,
  'ZSensor': CIAO AFM image "Height Sensor", shape: (128, 128), unit: nanometer}
- ```
+```
 
 To extract a single image, e.g. `ZSensor` for height data:
 ```python
