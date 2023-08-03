@@ -79,12 +79,15 @@ class CIAOImage:
         corrected_image = self.image * corrected_hard_scale * soft_scale_value
 
         # Calculate pixel sizes in physical units
-        # TODO: Pixel size is off when image is not squared. Can possibly be corrected with "Aspect Ratio" parameter
+        # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
+        n_rows, n_cols = self.image.shape
+        aspect_ratio = (max(self.image.shape) / n_rows, max(self.image.shape) / n_cols)
         scansize = int(full_metadata['Ciao scan list']['Scan Size'].split()[0])
-        pixel_size_x = scansize / (int(full_metadata['Ciao scan list']['Samps/line']) - 1)
-        pixel_size_y = scansize / (int(full_metadata['Ciao scan list']['Lines']) - 1)
 
-        return corrected_image, pixel_size_x, pixel_size_y
+        pixel_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
+        pixel_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
+
+        return corrected_image, pixel_size_cols, pixel_size_rows
 
 
 @dataclass
@@ -193,14 +196,16 @@ if __name__ == '__main__':
     # Load data as raw bytes and lines
     datapath1 = Path.home() / 'Data' / 'afm_testfile1.spm'
     datapath2 = Path.home() / 'Data' / 'afm_testfile2.spm'
-    spm_data1 = SPMFile(datapath1)
+    # spm_data1 = SPMFile(datapath1)
     spm_data2 = SPMFile(datapath2)
 
-    print(spm_data1)
+    print(spm_data2)
 
     # Plot images in SPM file
-    fig, ax = plt.subplots(ncols=len(spm_data1.images))
-    for j, image in enumerate(spm_data1.images):
+    fig, ax = plt.subplots(ncols=len(spm_data2.images))
+    for j, image in enumerate(spm_data2.images):
         ax[j].imshow(image.image_physical)
+        ax[j].set_title(image.title)
 
+    plt.tight_layout()
     plt.show()
