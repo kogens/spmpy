@@ -11,15 +11,19 @@ import pint
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
-    r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
+    r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
 # Define regex to identify numerical values and UnitRegistry for handling units.
 NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( [\wº~/*]+)?$')
-UREG = pint.UnitRegistry()
-UREG.define('LSB = least_significant_bit')
-UREG.define('Arb = arbitrary_units')
-UREG.define('º = deg = degree')
-UREG.default_format = '~C'
+
+# Integer size used when decoding data from raw bytestrings
+INTEGER_SIZE = 2 ** 32
+
+ureg = pint.UnitRegistry()
+ureg.define('least_significant_bit  = [] = LSB')
+ureg.define('arbitrary_units = [] = Arb')
+ureg.define('@alias degree = º')  # The files use "Ordinal indicator": º instead of the actual degree symbol: °
+ureg.default_format = '~C'
 
 
 class SPMFile:
@@ -50,10 +54,28 @@ class SPMFile:
         metadata_lines = extract_metadata_lines(file_bytes)
         metadata = interpret_metadata(metadata_lines)
         images = extract_ciao_images(metadata, file_bytes)
-
         self.metadata = metadata
-        self._flat_metadata = {k: v for inner_dict in self.metadata.values() for k, v in inner_dict.items()}
+
+        # Construct a "flat metadata" for accessing with __getitem__.
+        # Avoid "Ciao image list" as it appears multiple times
+        non_repeating_keys = [key for key in metadata.keys() if 'Ciao image list' not in key]
+        self._flat_metadata = {k: v for key in non_repeating_keys for k, v in metadata[key].items()}
+
         self.images = images
+
+    @property
+    def groups(self) -> dict[str, dict[str]]:
+        """ CIAO parameters ordered by group number """
+        groups = {}
+        for key, value in sorted(self._flat_metadata.items()):
+            if isinstance(value, CIAOParameter):
+                if value.group in groups.keys():
+                    groups[value.group].update({key.split(':', 1)[-1]: value})
+                else:
+                    groups[value.group] = {}
+                    groups[value.group].update({key.split(':', 1)[-1]: value})
+
+        return groups
 
 
 class CIAOImage:
@@ -73,15 +95,16 @@ class CIAOImage:
         data_length = image_metadata['Data length']
 
         # Calculate the number of pixels in order to decode the bytestring.
-        # Note: The byte lengths don't seem to follow the bytes/pixel defined in the metadata 2ith "Bytes/pixel".
+        # Note: "Bytes/pixel" is defined in the metadata but byte lengths don't seem to follow the bytes/pixel it.
         n_rows, n_cols = image_metadata['Number of lines'], image_metadata['Samps/line']
         n_pixels = n_cols * n_rows
 
         # Extract relevant image data from the raw bytestring of the full file and decode the byte values
-        # as signed 32-bit integers (despite documentation saying 16-bit signed int).
+        # as signed 32-bit integers in little-endian (same as "least significant bit").
+        # Note that this is despite documentation saying 16-bit signed int.
         # https://docs.python.org/3/library/struct.html#format-characters
-        bytedata = file_bytes[data_start: data_start + data_length]
-        pixel_values = struct.unpack(f'{n_pixels}i', bytedata)
+        bytestring = file_bytes[data_start: data_start + data_length]
+        pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
@@ -96,7 +119,16 @@ class CIAOImage:
         return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | pint.Quantity:
-        return self.metadata[key]
+        # Return metadata by exact key
+        if key in self.metadata:
+            return self.metadata[key]
+
+        # If key is not found, try without group numbers in metadata keys
+        merged_keys = {k.split(':', 1)[-1]: k for k in self.metadata.keys()}
+        if key in merged_keys:
+            return self.metadata[merged_keys[key]]
+        else:
+            raise KeyError(f'Key not found: {key}')
 
     def __repr__(self) -> str:
         reprstr = (f'{self.metadata["Data type"]} image "{self.title}" [{self.image.units}], '
@@ -118,7 +150,7 @@ class CIAOImage:
         # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
         # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
         # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
-        corrected_hard_scale = hard_value / 2 ** 32
+        corrected_hard_scale = hard_value / INTEGER_SIZE
         corrected_image = self.raw_image * corrected_hard_scale * soft_scale_value
         self.image = corrected_image
 
@@ -152,25 +184,26 @@ class CIAOImage:
 @dataclass
 class CIAOParameter:
     r""" CIAO parameters are lines in the SPM file starting with \@ and have several "sub" parameters """
+    group: int | None
     parameter: str
     ptype: str
-    value: float | str | pint.Quantity
+    value: float | str | pint.Quantity | None
 
-    group: int = None
-    hscale: float = None
-    sscale: str = None
-    internal_designation: str = None
-    external_designation: str = None
+    sscale: str
+    internal_designation: str
 
-    def __init__(self, ciao_string: str):
-        self.ciao_string = ciao_string
-        match = CIAO_REGEX.match(ciao_string)
+    hscale: float | None = None
+    external_designation: str | None = None
+
+    def __init__(self, parameter_string: str):
+        self._raw_string = parameter_string.lstrip('\\@')
+        match = CIAO_REGEX.match(parameter_string)
         if match:
             self.group = int(match.group('group')) if match.group('group') else None
             self.parameter = match.group('param')
             self.ptype = match.group('type')
 
-            # "Soft scale" and "Internal designation" seem to be interchangable
+            # "Soft scale" and "Internal designation" seem to be interchangeable
             self.sscale = parse_parameter(match.group('softscale'))
             self.internal_designation = self.sscale
 
@@ -183,39 +216,44 @@ class CIAOParameter:
                 # "Select" parameter
                 self.external_designation = parse_parameter(match.group('hardval'))
         else:
-            raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
+            raise ValueError(f'Not a recognized CIAO parameter object: {parameter_string}')
 
     def __getattr__(self, name):
         return getattr(self.value, name)
 
+    def __repr__(self) -> str:
+        return self.ciao_string
+
     def __str__(self) -> str:
         return f'{self.value}'
 
-    def __mul__(self, other) -> pint.Quantity:
+    def __mul__(self, other) -> int | float | pint.Quantity:
         if isinstance(other, CIAOParameter):
             return self.value * other.value
         else:
             return self.value * other
 
-    def __truediv__(self, other) -> pint.Quantity:
+    def __truediv__(self, other) -> int | float | pint.Quantity:
         if isinstance(other, CIAOParameter):
             return self.value / other.value
         else:
             return self.value / other
 
-    def __add__(self, other) -> pint.Quantity:
+    def __add__(self, other) -> int | float | pint.Quantity:
         if isinstance(other, CIAOParameter):
             return self.value + other.value
         else:
             return self.value + other
 
-    def __sub__(self, other) -> pint.Quantity:
+    def __sub__(self, other) -> int | float | pint.Quantity:
         if isinstance(other, CIAOParameter):
             return self.value - other.value
         else:
             return self.value - other
 
-    def to_string(self):
+    @property
+    def ciao_string(self, backslash: bool = False):
+        start = '\\@' if backslash else ''
         group_string = f'{self.group}:' if self.group else ''
         hscale_string = f'({self.hscale})' if self.hscale else ''
         sscale_string = f'[{self.sscale}]' if self.sscale or self.ptype == 'S' else ''
@@ -225,7 +263,7 @@ class CIAOParameter:
             value_string = f'{self.value}'
         else:
             value_string = ''
-        ciao_string = f'\\@{group_string}{self.parameter}: {self.ptype} {sscale_string} {hscale_string}  {value_string}'
+        ciao_string = f'{start}{group_string}{self.parameter}: {self.ptype} {sscale_string} {hscale_string} {value_string}'
 
         return ciao_string
 
@@ -326,4 +364,4 @@ def parse_parameter(parameter_string) -> str | int | float | pint.Quantity:
             return float(value_str)
     else:
         # Value with unit
-        return UREG.Quantity(value_str)
+        return ureg.Quantity(value_str)
