@@ -56,7 +56,13 @@ This will show the image with pixels on x and y-axis. For `imshow()` you can set
 Either calculate the extent with `image.px_size_x` and `image.px_size_y` or use the built in `image.extent` value.
 The coordinates are also available as `image.x`, `image.y` or meshgrids in `image.meshgrid`.
 ```python
-plt.imshow(height_im, extent=height_im.extent)
+# Plot the height image with units
+im = plt.imshow(height_im, extent=height_im.extent)
+plt.title(height_im.title)
+plt.xlabel(height_im.x.units)
+plt.ylabel(height_im.y.units)
+cbar = plt.colorbar(im)
+cbar.set_label(f'{height_im["Image Data"]} [{height_im.units}]')
 plt.show()
 ```
 
