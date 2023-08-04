@@ -2,6 +2,7 @@ import re
 import struct
 import warnings
 from dataclasses import dataclass
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
 
@@ -266,6 +267,8 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
             metadata[current_section][key] = parse_parameter(value)
+
+    metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
     if sort:
         for key, value in metadata.items():
