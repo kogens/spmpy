@@ -135,8 +135,8 @@ class CIAOImage:
 
         self.height = (n_rows - 1) * px_size_rows
         self.width = (n_cols - 1) * px_size_cols
-        self.y = np.linspace(0, self.width, n_rows)
-        self.x = np.linspace(0, self.height, n_cols)
+        self.y = np.linspace(0, self.height, n_rows)
+        self.x = np.linspace(0, self.width, n_cols)
 
     @property
     def extent(self) -> list[float]:
