@@ -1,5 +1,6 @@
 import re
 import struct
+import warnings
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -87,7 +88,7 @@ class CIAOImage:
         self.title = self.metadata['2:Image Data'].internal_designation
 
     def __array__(self) -> np.ndarray:
-        # Array representation is just the numpy array
+        warnings.filterwarnings("ignore", category=pint.UnitStrippedWarning)
         return self.image.__array__()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
