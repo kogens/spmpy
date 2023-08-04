@@ -1,6 +1,6 @@
 # Load SPM files from Bruker AFM Microscopes
 ## Setup
-Requires `numpy` and [`pint`](https://pint.readthedocs.io/) (for units), optionally `matplotlib` for plotting examples below
+Requires `numpy` and [`pint`](https://pint.readthedocs.io/) for units, optionally `matplotlib` for plotting examples below
 ```
 pip install numpy pint matplotlib
 ```
@@ -8,7 +8,7 @@ pip install numpy pint matplotlib
 Place the `spmloader.py` file with your script and import the `SPMFile` class.
 
 ## Loading SPM files
-The SPM file can be loaded by passing a file path directly to `SPMFile` as such:
+The SPM file can be loaded by passing a file path directly to `SPMFile`:
 
 ```python
 from spmloader import SPMFile
@@ -23,9 +23,12 @@ This should give something like::
 SPM file: "afm_testfile.spm", 2023-05-24 10:27:35. Images: ['ZSensor', 'AmplitudeError', 'Phase']`
 ```
 
-All the metadata is accessible as `spm_data.metata` where it is organized in the sections starting with "*" in the 
-SPM file, or you can access any parameter directly by treating `spm_data` as a dict, e.g. `spm_data['Scan Size']` or 
-`spm_data['Sens. ZsensSen']`.
+All the metadata is accessible as `spm_data.metadata` where it is organized in the sections starting with "*" in the 
+SPM file. You can also access any parameter directly by treating `spm_data` as a dict, e.g. 
+```python
+scan_size = spm_data['Scan Size']
+z_sensor_scalig = spm_data['Sens. ZsensSen']
+```
 
 Each parameter in the metadata is automatically interpreted into relevant datatypes (numbers, strings etc). 
 Any parameter with units is represented as a `Quantity` from the [Pint](https://pint.readthedocs.io/) library.
@@ -33,30 +36,44 @@ Any parameter with units is represented as a `Quantity` from the [Pint](https://
 
 
 ### Images in the SPM file
-An SPM file usually has more than one image and can be accessed as `spm_data.images`:
+An SPM file usually has more than one image and can be accessed with `spm_data.images`:
 ```
 {'AmplitudeError': AFM image "AmplitudeError" [mV·nm/V], (128, 128) px = (4500.0, 4500.0) nm,
  'Phase': AFM image "Phase" [degree], (128, 128) px = (4500.0, 4500.0) nm,
  'ZSensor': AFM image "ZSensor" [nm], (128, 128) px = (4500.0, 4500.0) nm}
 ```
 
-To extract a single image, e.g. `ZSensor` for height data:
+These images have already been converted to physical units and  can be plotted directly:
 ```python
 import matplotlib.pyplot as plt
 
-height_image = spm_data.images['ZSensor']
-plt.imshow(height_image)
+height_im = spm_data.images['ZSensor']
+plt.imshow(height_im)
 plt.show()
 ```
 
 This will show the image with pixels on x and y-axis. For `imshow()` you can set an `extent` to show the physical units.
 Either calculate the extent with `image.px_size_x` and `image.px_size_y` or use the built in `image.extent` value.
+The coordinates are also available as `image.x`, `image.y` or meshgrids in `image.meshgrid`.
 ```python
-plt.imshow(height_image, extent=height_image.extent)
+plt.imshow(height_im, extent=height_im.extent)
 plt.show()
 ```
 
-The coordinates are also available as `image.x`, `image.y` or meshgrids in `image.meshgrid`.
+The underlying data is stored as Pint `Quantity` objects which handles the units and support most of the same operations
+as a numpy `ndarray`, such as addition, multiplication etc. with other images although this currently will strip the 
+metadata
+```python
+min_value, max_value = height_im.min(), height_im.max()
+
+# Set zero point at the lowest value
+height_im_zeroed = height_im - min_value
+
+# Normalize image to have values from 0 to 1
+height_im_normalized = (height_im-min_value)/(max_value-min_value)
+```
+
+
 
 All images found in the SPM file, such as phase and amplitude error images
 can be plotted like so
