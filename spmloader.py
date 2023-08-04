@@ -1,7 +1,6 @@
 import re
 import struct
 from dataclasses import dataclass
-from datetime import datetime
 from os import PathLike
 from pathlib import Path
 
@@ -89,27 +88,24 @@ class CIAOImage:
 
     def __array__(self) -> np.ndarray:
         # Array representation is just the numpy array
-        return self.image.magnitude
+        return self.image.__array__()
 
-    # def __add__(self, other):
-    #     return self.image + other.image
-    #
-    # def __sub__(self, other):
-    #     return self.image + other.image
-
-    def __mul__(self, other) -> pint.Quantity:
-        # Allow multiplication with numbers
-        return self.image * other
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | pint.Quantity:
         return self.metadata[key]
 
     def __repr__(self) -> str:
-        reprstr = f'{self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'
+        reprstr = (f'{self.metadata["Data type"]} image "{self.title}" [{self.image.units}], '
+                   f'{self.image.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
 
     def __str__(self):
         return self.__repr__()
+
+    def __getattr__(self, name):
+        return getattr(self.image, name)
 
     def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
@@ -156,7 +152,7 @@ class CIAOParameter:
     r""" CIAO parameters are lines in the SPM file starting with \@ and have several "sub" parameters """
     parameter: str
     ptype: str
-    value: float | str
+    value: float | str | pint.Quantity
 
     group: int = None
     hscale: float = None
@@ -185,8 +181,11 @@ class CIAOParameter:
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
+    def __getattr__(self, name):
+        return getattr(self.value, name)
+
     def __str__(self) -> str:
-        return self.value
+        return f'{self.value}'
 
     def __mul__(self, other) -> pint.Quantity:
         if isinstance(other, CIAOParameter):
