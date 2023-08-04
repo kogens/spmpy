@@ -13,11 +13,12 @@ CIAO_REGEX = re.compile(
     r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s?(?P<hardval>.*)$')
 
 # Define regex to identify numerical values and UnitRegistry for handling units.
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/]+)?$')
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/*]+)?$')
 UREG = pint.UnitRegistry()
-UREG.define('LSB = Least Significant Bit = 1')
-UREG.define('Arb = 1')
+UREG.define('LSB = least_significant_bit = 1')
+UREG.define('Arb = arbitrary_units = 1')
 UREG.define('º = deg = degree')
+UREG.default_format = '~'
 
 
 class SPMFile:
@@ -25,19 +26,21 @@ class SPMFile:
 
     def __init__(self, path: str | PathLike):
         self.path = Path(path)
-        self.metadata, self.images = self.load_spm()
-        self._flat_metadata = {k: v for inner_dict in self.metadata.values() for k, v in inner_dict.items()}
-        self.date = datetime.strptime(self.metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
+        self.metadata = {}
+        self.images = {}
+        self._flat_metadata = {}
+
+        self.load_spm()
 
     def __repr__(self) -> str:
         titles = [x for x in self.images.keys()]
-        return f'SPM file: "{self.path.name}", {self.date}. Images: {titles}'
+        return f'SPM file: "{self.path.name}", {self["Date"]}. Images: {titles}'
 
     def __getitem__(self, item) -> tuple[int, float, str, pint.Quantity]:
         """ Fetches values from the metadata when class is called like a dict """
         return self._flat_metadata[item]
 
-    def load_spm(self) -> tuple[dict[str, dict[str, int, float, str, pint.Quantity]], pint.Quantity]:
+    def load_spm(self):
         """ Load an SPM file and extract images and metadata """
         with open(self.path, 'rb') as f:
             file_bytes = f.read()
@@ -47,7 +50,9 @@ class SPMFile:
         metadata = interpret_metadata(metadata_lines)
         images = extract_ciao_images(metadata, file_bytes)
 
-        return metadata, images
+        self.metadata = metadata
+        self._flat_metadata = {k: v for inner_dict in self.metadata.values() for k, v in inner_dict.items()}
+        self.images = images
 
 
 class CIAOImage:
@@ -74,7 +79,7 @@ class CIAOImage:
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
         self.image, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
-        self.title = self.metadata['2:Image Data'].external_designation
+        self.title = self.metadata['2:Image Data'].internal_designation
 
     def __array__(self) -> np.ndarray:
         # Array representation is just the numpy array
@@ -93,8 +98,8 @@ class CIAOImage:
     def __getitem__(self, key) -> str | int | float | pint.Quantity:
         return self.metadata[key]
 
-    def __repr__(self) -> str:
-        reprstr = f'CIAO {self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'
+    def __str__(self) -> str:
+        reprstr = f'{self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'
         return reprstr
 
     def get_physical_units(self, full_metadata: dict) -> tuple[pint.Quantity, pint.Quantity, pint.Quantity]:
@@ -159,7 +164,7 @@ class CIAOParameter:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
     def __str__(self) -> str:
-        return f'CIAO parameter: {self.value}'
+        return self.value
 
     def __mul__(self, other) -> pint.Quantity:
         if isinstance(other, CIAOParameter):
@@ -207,7 +212,7 @@ def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
         raise ValueError('Beginning or end of "\\*File list" missing, cannot extract metadata')
 
 
-def interpret_metadata(metadata_lines: list[str]) -> dict[str, dict[str, int, float, str, pint.Quantity]]:
+def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, pint.Quantity]]:
     """ Walk through all lines in metadata and interpret sections beginning with * """
     metadata = {}
     current_section = None
@@ -239,6 +244,12 @@ def interpret_metadata(metadata_lines: list[str]) -> dict[str, dict[str, int, fl
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
             metadata[current_section][key] = parse_parameter(value)
+
+    metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
+
+    if sort:
+        for key, value in metadata.items():
+            metadata[key] = dict(sorted(metadata[key].items()))
 
     return metadata
 
