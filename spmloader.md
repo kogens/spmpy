@@ -50,12 +50,13 @@ plt.show()
 ```
 
 This will show the image with pixels on x and y-axis. For `imshow()` you can set an `extent` to show the physical units.
-Either calculate the extent with `image.px_size_rows` and `image.px_size_cols` or use the built in `image.extent` value.
-Pyplot doesn't like units, so get the raw values with `image.extent.magnitude`
+Either calculate the extent with `image.px_size_x` and `image.px_size_y` or use the built in `image.extent` value.
 ```python
-plt.imshow(height_image, extent=height_image.extent.magnitude)
+plt.imshow(height_image, extent=height_image.extent)
 plt.show()
 ```
+
+The coordinates are also available as `image.x`, `image.y` or meshgrids in `image.meshgrid`.
 
 All images found in the SPM file, such as phase and amplitude error images
 can be plotted like so
@@ -63,7 +64,7 @@ can be plotted like so
 # Plot images in SPM file
 fig, ax = plt.subplots(ncols=len(spm_data.images))
 for j, image in enumerate(spm_data.images.values()):
-    ax[j].imshow(image, extent=image.extent.magnitude)
+    ax[j].imshow(image, extent=image.extent)
     ax[j].set_title(image.title)
 
 plt.tight_layout()

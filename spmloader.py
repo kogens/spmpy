@@ -13,7 +13,7 @@ CIAO_REGEX = re.compile(
     r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s?(?P<hardval>.*)$')
 
 # Define regex to identify numerical values and UnitRegistry for handling units.
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*)( [\wº~/*]+)?$')
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( [\wº~/*]+)?$')
 UREG = pint.UnitRegistry()
 UREG.define('LSB = least_significant_bit = 1')
 UREG.define('Arb = arbitrary_units = 1')
@@ -59,6 +59,12 @@ class CIAOImage:
     """ A CIAO image with metadata"""
 
     def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
+        self.width = None
+        self.height = None
+        self.image = None
+        self.px_size_x, self.px_size_y = None, None
+        self.x, self.y = None, None
+
         self.metadata = image_metadata
 
         # Data offset and length refer to the bytes of the original file including metadata
@@ -78,7 +84,7 @@ class CIAOImage:
 
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
-        self.image, self.pixel_size_x, self.pixel_size_y = self.get_physical_units(full_metadata)
+        self.get_physical_units(full_metadata)
         self.title = self.metadata['2:Image Data'].internal_designation
 
     def __array__(self) -> np.ndarray:
@@ -98,11 +104,14 @@ class CIAOImage:
     def __getitem__(self, key) -> str | int | float | pint.Quantity:
         return self.metadata[key]
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         reprstr = f'{self.metadata["Data type"]} image "{self.title}", shape: {self.image.shape}, unit: {self.image.units}'
         return reprstr
 
-    def get_physical_units(self, full_metadata: dict) -> tuple[pint.Quantity, pint.Quantity, pint.Quantity]:
+    def __str__(self):
+        return self.__repr__()
+
+    def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
         hard_value = z_scale.value
         soft_scale_key = z_scale.sscale
@@ -113,6 +122,7 @@ class CIAOImage:
         # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
         corrected_hard_scale = hard_value / 2 ** 32
         corrected_image = self.raw_image * corrected_hard_scale * soft_scale_value
+        self.image = corrected_image
 
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
@@ -123,10 +133,22 @@ class CIAOImage:
         px_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
         px_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
 
-        self.extent = [0, (n_cols - 1) * px_size_cols.magnitude, 0,
-                       (n_rows - 1) * px_size_rows.magnitude] * px_size_cols.units
+        self.px_size_y = px_size_rows
+        self.px_size_x = px_size_cols
 
-        return corrected_image, px_size_cols, px_size_rows
+        self.height = (n_rows - 1) * px_size_rows
+        self.width = (n_cols - 1) * px_size_cols
+        self.y = np.linspace(0, self.width, n_rows)
+        self.x = np.linspace(0, self.height, n_cols)
+
+    @property
+    def extent(self) -> list[float]:
+        ext = [0, self.width.magnitude, 0, self.height.magnitude]
+        return ext
+
+    @property
+    def meshgrid(self) -> np.meshgrid:
+        return np.meshgrid(self.x, self.y)
 
 
 @dataclass
@@ -244,8 +266,6 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
             metadata[current_section][key] = parse_parameter(value)
-
-    metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
     if sort:
         for key, value in metadata.items():
