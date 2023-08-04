@@ -35,9 +35,9 @@ Any parameter with units is represented as a `Quantity` from the [Pint](https://
 ### Images in the SPM file
 An SPM file usually has more than one image and can be accessed as `spm_data.images`:
 ```
-{'AmplitudeError': CIAO AFM image "Amplitude Error", shape: (128, 128), unit: millivolt * nanometer / volt,
- 'Phase': CIAO AFM image "Phase", shape: (128, 128), unit: º,
- 'ZSensor': CIAO AFM image "Height Sensor", shape: (128, 128), unit: nanometer}
+{'AmplitudeError': AFM image "AmplitudeError" [mV·nm/V], (128, 128) px = (4500.0, 4500.0) nm,
+ 'Phase': AFM image "Phase" [degree], (128, 128) px = (4500.0, 4500.0) nm,
+ 'ZSensor': AFM image "ZSensor" [nm], (128, 128) px = (4500.0, 4500.0) nm}
 ```
 
 To extract a single image, e.g. `ZSensor` for height data:
