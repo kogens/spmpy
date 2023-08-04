@@ -84,7 +84,7 @@ class CIAOImage:
     def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
         self.width = None
         self.height = None
-        self.image = None
+        self.data = None
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
 
@@ -113,10 +113,10 @@ class CIAOImage:
 
     def __array__(self) -> np.ndarray:
         warnings.filterwarnings("ignore", category=pint.UnitStrippedWarning)
-        return self.image.__array__()
+        return self.data.__array__()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
+        return getattr(self.data, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | pint.Quantity:
         # Return metadata by exact key
@@ -131,15 +131,51 @@ class CIAOImage:
             raise KeyError(f'Key not found: {key}')
 
     def __repr__(self) -> str:
-        reprstr = (f'{self.metadata["Data type"]} image "{self.title}" [{self.image.units}], '
-                   f'{self.image.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
+        reprstr = (f'{self.metadata["Data type"]} image "{self.title}" [{self.data.units}], '
+                   f'{self.data.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
 
     def __str__(self):
         return self.__repr__()
 
     def __getattr__(self, name):
-        return getattr(self.image, name)
+        return getattr(self.data, name)
+
+    def __add__(self, other):
+        if isinstance(other, CIAOImage):
+            return self.data + other.data
+        else:
+            return self.data + other
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, CIAOImage):
+            return self.data - other.data
+        else:
+            return self.data - other
+
+    def __rsub__(self, other):
+        return self.__sub__(other)
+
+    def __mul__(self, other):
+        if isinstance(other, CIAOImage):
+            return self.data * other.data
+        else:
+            return self.data * other
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        if isinstance(other, CIAOImage):
+            return self.data / other.data
+        else:
+            return self.data / other
+
+    def __rtruediv__(self, other):
+        return self.__truediv__(other)
 
     def get_physical_units(self, full_metadata: dict):
         z_scale = self.metadata['2:Z scale']
@@ -152,7 +188,7 @@ class CIAOImage:
         # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
         corrected_hard_scale = hard_value / INTEGER_SIZE
         corrected_image = self.raw_image * corrected_hard_scale * soft_scale_value
-        self.image = corrected_image
+        self.data = corrected_image
 
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
