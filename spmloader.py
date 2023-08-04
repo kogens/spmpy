@@ -11,15 +11,15 @@ import pint
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
-    r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s?(?P<hardval>.*)$')
+    r'^\\?@(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
 # Define regex to identify numerical values and UnitRegistry for handling units.
 NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( [\wº~/*]+)?$')
 UREG = pint.UnitRegistry()
-UREG.define('LSB = least_significant_bit = 1')
-UREG.define('Arb = arbitrary_units = 1')
+UREG.define('LSB = least_significant_bit')
+UREG.define('Arb = arbitrary_units')
 UREG.define('º = deg = degree')
-UREG.default_format = '~'
+UREG.default_format = '~C'
 
 
 class SPMFile:
@@ -170,16 +170,18 @@ class CIAOParameter:
             self.parameter = match.group('param')
             self.ptype = match.group('type')
 
+            # "Soft scale" and "Internal designation" seem to be interchangable
+            self.sscale = parse_parameter(match.group('softscale'))
+            self.internal_designation = self.sscale
+
+            self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
+
             if self.ptype in ['V', 'C']:
                 # "Value" or "Scale" parameter
-                self.sscale = parse_parameter(match.group('softscale'))
                 self.hscale = parse_parameter(match.group('hardscale')) if match.group('hardscale') else None
-                self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
             elif self.ptype == 'S':
                 # "Select" parameter
-                self.internal_designation = parse_parameter(match.group('softscale'))
                 self.external_designation = parse_parameter(match.group('hardval'))
-                self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
@@ -212,6 +214,20 @@ class CIAOParameter:
             return self.value - other.value
         else:
             return self.value - other
+
+    def to_string(self):
+        group_string = f'{self.group}:' if self.group else ''
+        hscale_string = f'({self.hscale})' if self.hscale else ''
+        sscale_string = f'[{self.sscale}]' if self.sscale or self.ptype == 'S' else ''
+        if self.ptype and self.ptype == 'S':
+            value_string = f'"{self.value}"'
+        elif self.ptype and self.ptype in ['V', 'C']:
+            value_string = f'{self.value}'
+        else:
+            value_string = ''
+        ciao_string = f'\\@{group_string}{self.parameter}: {self.ptype} {sscale_string} {hscale_string}  {value_string}'
+
+        return ciao_string
 
 
 def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
