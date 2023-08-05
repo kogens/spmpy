@@ -79,6 +79,13 @@ height_im_zeroed = height_im - min_value
 height_im_normalized = (height_im-min_value)/(max_value-min_value)
 ```
 
+For some operations you need the pure Numpy `ndarray`, e.g. for many [scikit-image](https://scikit-image.org/) functions, and 
+this can be accessed using the `.magnitude` or `.m` attribute:
+```python
+# Get underlying numpy ndarray
+raw_numpy_array = height_im.m
+print(type(raw_numpy_array))
+```
 
 
 All images found in the SPM file, such as phase and amplitude error images
@@ -86,9 +93,11 @@ can be plotted like so
 ```python
 # Plot images in SPM file
 fig, ax = plt.subplots(ncols=len(spm_data.images))
-for j, image in enumerate(spm_data.images.values()):
-    ax[j].imshow(image, extent=image.extent)
-    ax[j].set_title(image.title)
+for i, image in enumerate(spm_data.images.values()):
+    im = ax[i].imshow(image, extent=image.extent)
+    ax[i].set_title(image.title)
+    ax[i].set_xlabel(image.x.units)
+    ax[i].set_ylabel(image.y.units)
 
 plt.tight_layout()
 plt.show()

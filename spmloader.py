@@ -106,10 +106,55 @@ class CIAOImage:
         bytestring = file_bytes[data_start: data_start + data_length]
         pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
+        # Save Z scale parameter from full metadata
+        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(full_metadata, '2:Z scale')
+        self.metadata.update(zscale_soft_scale)
+        self.scansize = full_metadata['Ciao scan list']['Scan Size']
+
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
-        self.get_physical_units(full_metadata)
+        self.calculate_physical_units()
         self.title = self.metadata['2:Image Data'].internal_designation
+
+    def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
+        soft_scale_key = self.metadata[key].sscale
+        soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
+
+        return {soft_scale_key: soft_scale_value}
+
+    @property
+    def corrected_zscale(self):
+        """ Returns the z-scale correction used to translate from "pixel value" to physical units in the image"""
+        z_scale = self.metadata['2:Z scale']
+        hard_value = z_scale.value
+        soft_scale_key = z_scale.sscale
+        soft_scale_value = self.metadata[soft_scale_key]
+
+        # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
+        # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
+        # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
+        corrected_hard_scale = hard_value / INTEGER_SIZE
+
+        return corrected_hard_scale * soft_scale_value
+
+    def calculate_physical_units(self):
+        """ Calculate physical scale of image values """
+        self.data = self.raw_image * self.corrected_zscale
+
+        # Calculate pixel sizes in physical units
+        # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
+        n_rows, n_cols = self.raw_image.shape
+        aspect_ratio = (max(self.raw_image.shape) / n_rows, max(self.raw_image.shape) / n_cols)
+
+        # Calculate pixel sizes and
+        self.px_size_y = self.scansize / (n_rows - 1) / aspect_ratio[0]
+        self.px_size_x = self.scansize / (n_cols - 1) / aspect_ratio[1]
+
+        self.height = (n_rows - 1) * self.px_size_y
+        self.width = (n_cols - 1) * self.px_size_x
+
+        self.y = np.linspace(0, self.height, n_rows)
+        self.x = np.linspace(0, self.width, n_cols)
 
     def __array__(self) -> np.ndarray:
         warnings.filterwarnings("ignore", category=pint.UnitStrippedWarning)
@@ -176,36 +221,6 @@ class CIAOImage:
 
     def __rtruediv__(self, other):
         return self.__truediv__(other)
-
-    def get_physical_units(self, full_metadata: dict):
-        z_scale = self.metadata['2:Z scale']
-        hard_value = z_scale.value
-        soft_scale_key = z_scale.sscale
-        soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
-
-        # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
-        # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
-        # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
-        corrected_hard_scale = hard_value / INTEGER_SIZE
-        corrected_image = self.raw_image * corrected_hard_scale * soft_scale_value
-        self.data = corrected_image
-
-        # Calculate pixel sizes in physical units
-        # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
-        n_rows, n_cols = self.raw_image.shape
-        aspect_ratio = (max(self.raw_image.shape) / n_rows, max(self.raw_image.shape) / n_cols)
-        scansize = full_metadata['Ciao scan list']['Scan Size']
-
-        px_size_rows = scansize / (n_rows - 1) / aspect_ratio[0]
-        px_size_cols = scansize / (n_cols - 1) / aspect_ratio[1]
-
-        self.px_size_y = px_size_rows
-        self.px_size_x = px_size_cols
-
-        self.height = (n_rows - 1) * px_size_rows
-        self.width = (n_cols - 1) * px_size_cols
-        self.y = np.linspace(0, self.height, n_rows)
-        self.x = np.linspace(0, self.width, n_cols)
 
     @property
     def extent(self) -> list[float]:
@@ -356,7 +371,11 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
         else:
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
-            metadata[current_section][key] = parse_parameter(value)
+            if key == 'Plane fit':
+                value = [float(x) for x in value.split()]
+                metadata[current_section][key] = value
+            else:
+                metadata[current_section][key] = parse_parameter(value)
 
     metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
