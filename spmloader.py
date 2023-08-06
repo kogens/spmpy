@@ -119,7 +119,8 @@ class CIAOImage:
         self.scansize = full_metadata['Ciao scan list']['Scan Size']
 
         # Reorder image into a numpy array and calculate the physical value of each pixel.
-        self._raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
+        # Row order is reversed in stored data, so we flip up/down.
+        self._raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
         self.calculate_physical_units()
         self.title = self.metadata['2:Image Data'].internal_designation
 
