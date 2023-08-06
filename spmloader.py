@@ -23,7 +23,7 @@ INTEGER_SIZE = 2 ** 32
 
 # Pint UnitRegistry handles physical quantities
 ureg = UnitRegistry()
-ureg.define('least_significant_bit  = [] = LSB')
+ureg.define(f'least_significant_bit  = {INTEGER_SIZE} = LSB')
 ureg.define('arbitrary_units = [] = Arb')
 ureg.define('log_arbitrary_units = [] = log_Arb')
 ureg.define('log_volt = [] = log_V')
@@ -261,17 +261,17 @@ class CIAOParameter:
             self.ptype = match.group('type')
 
             # "Soft scale" and "Internal designation" seem to be interchangeable
-            self.sscale = parse_parameter(match.group('softscale'))
+            self.sscale = parse_parameter_value(match.group('softscale'))
             self.internal_designation = self.sscale
 
-            self.value = parse_parameter(match.group('hardval')) if match.group('hardval') else None
+            self.value = parse_parameter_value(match.group('hardval')) if match.group('hardval') else None
 
             if self.ptype in ['V', 'C']:
                 # "Value" or "Scale" parameter
-                self.hscale = parse_parameter(match.group('hardscale')) if match.group('hardscale') else None
+                self.hscale = parse_parameter_value(match.group('hardscale')) if match.group('hardscale') else None
             elif self.ptype == 'S':
                 # "Select" parameter
-                self.external_designation = parse_parameter(match.group('hardval'))
+                self.external_designation = parse_parameter_value(match.group('hardval'))
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {parameter_string}')
 
@@ -377,9 +377,7 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
         else:
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
-            metadata[current_section][key] = parse_parameter(value)
-
-    metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
+            metadata[current_section][key] = parse_parameter_value(value)
 
     if sort:
         for key, value in metadata.items():
@@ -400,14 +398,16 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImag
     return images
 
 
-def parse_parameter(value_str) -> str | int | float | Quantity | list[float, Quantity]:
-    """ Parse parameters into either int, float, string or physical quantity """
+def parse_parameter_value(value_str: str) -> str | int | float | Quantity | list[float, Quantity] | None:
+    """ Parse parameters into number, string or physical quantity """
+
+    # Value is None, return it
     if not value_str:
         return value_str
 
+    # Strip whitespace and check for matches
     value_str = value_str.strip()
     match_numerical = NUMERICAL_REGEX.match(value_str)
-
     if match_numerical and match_numerical.group(2):
         # Value  is a quantity with unit
         unit = match_numerical.group(2)
@@ -429,7 +429,7 @@ def parse_parameter(value_str) -> str | int | float | Quantity | list[float, Qua
             # Decimal present, convert to float
             return float(value_str)
 
-    # Check if value is a list of units
+    # Check if value is a list of numbers with possible unit
     match_multiple_numerical = MULTIPLE_NUMERICAL.match(value_str)
     if match_multiple_numerical:
         # List of values separated by space, possibly with a unit
@@ -444,5 +444,12 @@ def parse_parameter(value_str) -> str | int | float | Quantity | list[float, Qua
 
         return magnitudes
 
-    # Parameter is not numerical, return string
+    # Try if value is a date
+    try:
+        value = datetime.strptime(value_str, '%I:%M:%S %p %a %b %d %Y')
+        return value
+    except ValueError:
+        pass
+
+    # No other matches, strip " and return value
     return value_str.strip('"')
