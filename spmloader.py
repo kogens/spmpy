@@ -15,7 +15,7 @@ CIAO_REGEX = re.compile(
     r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
 # Define regex to identify numerical values
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)([^\d:]+)?$')
+NUMERICAL_REGEX = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
 MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)( \D*)?$')
 
 # Integer size used when decoding data from raw bytestrings
@@ -40,6 +40,7 @@ class SPMFile:
         self.metadata = {}
         self.images = {}
         self._flat_metadata = {}
+        self._integer_size = INTEGER_SIZE
 
         self.load_spm()
 
@@ -312,15 +313,15 @@ class CIAOParameter:
     def ciao_string(self, backslash: bool = False):
         start = '\\@' if backslash else ''
         group_string = f'{self.group}:' if self.group else ''
-        hscale_string = f'({self.hscale})' if self.hscale else ''
-        sscale_string = f'[{self.sscale}]' if self.sscale or self.ptype == 'S' else ''
+        hscale_string = f' ({self.hscale})' if self.hscale else ''
+        sscale_string = f' [{self.sscale}]' if self.sscale or self.ptype == 'S' else ''
         if self.ptype and self.ptype == 'S':
-            value_string = f'"{self.value}"'
+            value_string = f' "{self.value}"'
         elif self.ptype and self.ptype in ['V', 'C']:
-            value_string = f'{self.value}'
+            value_string = f' {self.value}'
         else:
             value_string = ''
-        ciao_string = f'{start}{group_string}{self.parameter}: {self.ptype} {sscale_string} {hscale_string} {value_string}'
+        ciao_string = f'{start}{group_string}{self.parameter}: {self.ptype}{sscale_string}{hscale_string}{value_string}'
 
         return ciao_string
 
