@@ -13,12 +13,14 @@ import pint
 CIAO_REGEX = re.compile(
     r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
-# Define regex to identify numerical values and UnitRegistry for handling units.
+# Define regex to identify numerical values
 NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( [\wº~/*]+)?$')
+MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)([^\d]*)?$')
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
 
+# Pint UnitRegistry handles physical quantities
 ureg = pint.UnitRegistry()
 ureg.define('least_significant_bit  = [] = LSB')
 ureg.define('arbitrary_units = [] = Arb')
@@ -64,7 +66,7 @@ class SPMFile:
         self.images = images
 
     @property
-    def groups(self) -> dict[str, dict[str]]:
+    def groups(self) -> dict[int | None, dict[str]]:
         """ CIAO parameters ordered by group number """
         groups = {}
         for key, value in sorted(self._flat_metadata.items()):
@@ -112,7 +114,7 @@ class CIAOImage:
         self.scansize = full_metadata['Ciao scan list']['Scan Size']
 
         # Reorder image into a numpy array and calculate the physical value of each pixel.
-        self.raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
+        self._raw_image = np.array(pixel_values).reshape(n_rows, n_cols)
         self.calculate_physical_units()
         self.title = self.metadata['2:Image Data'].internal_designation
 
@@ -139,12 +141,12 @@ class CIAOImage:
 
     def calculate_physical_units(self):
         """ Calculate physical scale of image values """
-        self.data = self.raw_image * self.corrected_zscale
+        self.data = self._raw_image * self.corrected_zscale
 
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
-        n_rows, n_cols = self.raw_image.shape
-        aspect_ratio = (max(self.raw_image.shape) / n_rows, max(self.raw_image.shape) / n_cols)
+        n_rows, n_cols = self._raw_image.shape
+        aspect_ratio = (max(self._raw_image.shape) / n_rows, max(self._raw_image.shape) / n_cols)
 
         # Calculate pixel sizes and
         self.px_size_y = self.scansize / (n_rows - 1) / aspect_ratio[0]
