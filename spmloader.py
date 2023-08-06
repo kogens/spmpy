@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pint
+from pint import UnitRegistry, Quantity
 
 # Regex for CIAO parameters (lines starting with \@ )
 CIAO_REGEX = re.compile(
@@ -15,13 +16,13 @@ CIAO_REGEX = re.compile(
 
 # Define regex to identify numerical values
 NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)([^\d:]+)?$')
-MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)(\D*)?$')
+MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)( \D*)?$')
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
 
 # Pint UnitRegistry handles physical quantities
-ureg = pint.UnitRegistry()
+ureg = UnitRegistry()
 ureg.define('least_significant_bit  = [] = LSB')
 ureg.define('arbitrary_units = [] = Arb')
 ureg.define('log_arbitrary_units = [] = log_Arb')
@@ -46,7 +47,7 @@ class SPMFile:
         titles = [x for x in self.images.keys()]
         return f'SPM file: "{self.path.name}", {self["Date"]}. Images: {titles}'
 
-    def __getitem__(self, item) -> tuple[int, float, str, pint.Quantity]:
+    def __getitem__(self, item) -> tuple[int, float, str, Quantity]:
         """ Fetches values from the metadata when class is called like a dict """
         return self._flat_metadata[item]
 
@@ -168,7 +169,7 @@ class CIAOImage:
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return getattr(self.data, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
-    def __getitem__(self, key) -> str | int | float | pint.Quantity:
+    def __getitem__(self, key) -> str | int | float | Quantity:
         # Return metadata by exact key
         if key in self.metadata:
             return self.metadata[key]
@@ -243,7 +244,7 @@ class CIAOParameter:
     group: int | None
     parameter: str
     ptype: str
-    value: float | str | pint.Quantity | None
+    value: float | str | Quantity | None
 
     sscale: str
     internal_designation: str
@@ -283,25 +284,25 @@ class CIAOParameter:
     def __str__(self) -> str:
         return f'{self.value}'
 
-    def __mul__(self, other) -> int | float | pint.Quantity:
+    def __mul__(self, other) -> int | float | Quantity:
         if isinstance(other, CIAOParameter):
             return self.value * other.value
         else:
             return self.value * other
 
-    def __truediv__(self, other) -> int | float | pint.Quantity:
+    def __truediv__(self, other) -> int | float | Quantity:
         if isinstance(other, CIAOParameter):
             return self.value / other.value
         else:
             return self.value / other
 
-    def __add__(self, other) -> int | float | pint.Quantity:
+    def __add__(self, other) -> int | float | Quantity:
         if isinstance(other, CIAOParameter):
             return self.value + other.value
         else:
             return self.value + other
 
-    def __sub__(self, other) -> int | float | pint.Quantity:
+    def __sub__(self, other) -> int | float | Quantity:
         if isinstance(other, CIAOParameter):
             return self.value - other.value
         else:
@@ -339,13 +340,13 @@ def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
 
     if start_index is not None and end_index is not None:
         # Extract the identified lines between start and end. Decode strings and strip unwanted characters.
-        metadata_lines = [x.decode('latin-1').lstrip('\\').strip() for x in file_lines[start_index:end_index]]
+        metadata_lines = [x.decode('latin-1').lstrip('\\') for x in file_lines[start_index:end_index]]
         return metadata_lines
     else:
         raise ValueError('Beginning or end of "\\*File list" missing, cannot extract metadata')
 
 
-def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, pint.Quantity]]:
+def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, Quantity]]:
     """ Walk through all lines in metadata and interpret sections beginning with * """
     metadata = {}
     current_section = None
@@ -376,11 +377,7 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
         else:
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
-            if key == 'Plane fit':
-                value = [float(x) for x in value.split()]
-                metadata[current_section][key] = value
-            else:
-                metadata[current_section][key] = parse_parameter(value)
+            metadata[current_section][key] = parse_parameter(value)
 
     metadata['File list']['Date'] = datetime.strptime(metadata['File list']['Date'], '%I:%M:%S %p %a %b %d %Y')
 
@@ -403,18 +400,27 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImag
     return images
 
 
-def parse_parameter(parameter_string) -> str | int | float | pint.Quantity:
+def parse_parameter(value_str) -> str | int | float | Quantity | list[float, Quantity]:
     """ Parse parameters into either int, float, string or physical quantity """
-    if not parameter_string:
-        return parameter_string
+    if not value_str:
+        return value_str
 
-    value_str = parameter_string.strip(' "')
+    value_str = value_str.strip()
     match_numerical = NUMERICAL_REGEX.match(value_str)
 
-    if not match_numerical:
-        # Parameter is not numerical, return string
-        return value_str
-    elif match_numerical.group(2) is None:
+    if match_numerical and match_numerical.group(2):
+        # Value  is a quantity with unit
+        unit = match_numerical.group(2)
+        # A few units appear as e.g. log(Pa), replace with log_Pa etc.
+        if '(' in unit:
+            unit = unit.replace('(', '_').replace(')', '')
+        try:
+            return ureg.Quantity(float(match_numerical.group(1)), unit)
+        except pint.UndefinedUnitError:
+            print(f'Unit not recognized: {match_numerical.group(2)}, parameter not converted: {value_str}')
+            return value_str
+
+    elif match_numerical:
         # No unit detected, value is just number
         if '.' not in value_str:
             # No decimal, convert to integer
@@ -422,14 +428,21 @@ def parse_parameter(parameter_string) -> str | int | float | pint.Quantity:
         else:
             # Decimal present, convert to float
             return float(value_str)
-    else:
-        # Value with unit
-        unit = match_numerical.group(2)
-        try:
-            if '(' in unit:
-                unit = unit.replace('(', '_').replace(')', '')
-            value = ureg.Quantity(float(match_numerical.group(1)), unit)
-            return value
-        except pint.UndefinedUnitError as e:
-            print(f'Unit not recognized: {match_numerical.group(2)}, parameter not converted: {value_str}')
-            return value_str
+
+    # Check if value is a list of units
+    match_multiple_numerical = MULTIPLE_NUMERICAL.match(value_str)
+    if match_multiple_numerical:
+        # List of values separated by space, possibly with a unit
+        magnitudes = match_multiple_numerical.group(1).split()
+        magnitudes = [float(x) for x in magnitudes]
+
+        if match_multiple_numerical.group(2):
+            unit = match_multiple_numerical.group(2)
+            unit = unit.replace('~m', 'µm') if unit else None
+            magnitudes = Quantity(magnitudes, unit)
+        print('Multiple:', magnitudes)
+
+        return magnitudes
+
+    # Parameter is not numerical, return string
+    return value_str.strip('"')
