@@ -11,12 +11,12 @@ import pint
 from pint import UnitRegistry, Quantity
 
 # Regex for CIAO parameters (lines starting with \@ )
-CIAO_REGEX = re.compile(
+RE_CIAO_PARAM = re.compile(
     r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
 # Define regex to identify numerical values
-NUMERICAL_REGEX = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
-MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)( \D*)?$')
+RE_NUMERICAL = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
+RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:e\d+)? ?)+)([^\d:]+)?$')
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
@@ -255,7 +255,7 @@ class CIAOParameter:
 
     def __init__(self, parameter_string: str):
         self._raw_string = parameter_string.lstrip('\\@')
-        match = CIAO_REGEX.match(parameter_string)
+        match = RE_CIAO_PARAM.match(parameter_string)
         if match:
             self.group = int(match.group('group')) if match.group('group') else None
             self.parameter = match.group('param')
@@ -408,7 +408,7 @@ def parse_parameter_value(value_str: str) -> str | int | float | Quantity | list
 
     # Strip whitespace and check for matches
     value_str = value_str.strip()
-    match_numerical = NUMERICAL_REGEX.match(value_str)
+    match_numerical = RE_NUMERICAL.match(value_str)
     if match_numerical and match_numerical.group(2):
         # Value  is a quantity with unit
         unit = match_numerical.group(2)
@@ -431,19 +431,18 @@ def parse_parameter_value(value_str: str) -> str | int | float | Quantity | list
             return float(value_str)
 
     # Check if value is a list of numbers with possible unit
-    match_multiple_numerical = MULTIPLE_NUMERICAL.match(value_str)
+    match_multiple_numerical = RE_MULTIPLE_NUMERICAL.match(value_str)
     if match_multiple_numerical:
         # List of values separated by space, possibly with a unit
-        magnitudes = match_multiple_numerical.group(1).split()
-        magnitudes = [float(x) for x in magnitudes]
+        values = match_multiple_numerical.group(1).split()
+        values = [float(x) for x in values]
 
         if match_multiple_numerical.group(2):
             unit = match_multiple_numerical.group(2)
             unit = unit.replace('~m', 'µm') if unit else None
-            magnitudes = Quantity(magnitudes, unit)
-        print('Multiple:', magnitudes)
+            values = Quantity(values, unit)
 
-        return magnitudes
+        return values
 
     # Try if value is a date
     try:
