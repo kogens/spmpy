@@ -14,8 +14,8 @@ CIAO_REGEX = re.compile(
     r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
 
 # Define regex to identify numerical values
-NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( [\wº~/*]+)?$')
-MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)([^\d]*)?$')
+NUMERICAL_REGEX = re.compile(r'([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)([^\d:]+)?$')
+MULTIPLE_NUMERICAL = re.compile(r'^([+\-\d.eE ]+)(\D*)?$')
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
@@ -24,6 +24,9 @@ INTEGER_SIZE = 2 ** 32
 ureg = pint.UnitRegistry()
 ureg.define('least_significant_bit  = [] = LSB')
 ureg.define('arbitrary_units = [] = Arb')
+ureg.define('log_arbitrary_units = [] = log_Arb')
+ureg.define('log_volt = [] = log_V')
+ureg.define('log_pascal = [] = log_Pa')
 ureg.define('@alias degree = º')  # The files use "Ordinal indicator": º instead of the actual degree symbol: °
 ureg.default_format = '~C'
 
@@ -421,4 +424,12 @@ def parse_parameter(parameter_string) -> str | int | float | pint.Quantity:
             return float(value_str)
     else:
         # Value with unit
-        return ureg.Quantity(value_str)
+        unit = match_numerical.group(2)
+        try:
+            if '(' in unit:
+                unit = unit.replace('(', '_').replace(')', '')
+            value = ureg.Quantity(float(match_numerical.group(1)), unit)
+            return value
+        except pint.UndefinedUnitError as e:
+            print(f'Unit not recognized: {match_numerical.group(2)}, parameter not converted: {value_str}')
+            return value_str
