@@ -16,7 +16,7 @@ RE_CIAO_PARAM = re.compile(
 
 # Define regex to identify numerical values
 RE_NUMERICAL = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
-RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:e\d+)? ?)+)([^\d:]+)?$')
+RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:e[+-]\d+)? ?)+)([^\d:]+)?$')
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
