@@ -27,7 +27,7 @@ All the metadata is accessible as `spm_data.metadata` where it is organized in t
 SPM file. You can also access any parameter directly by treating `spm_data` as a dict, e.g. 
 ```python
 scan_size = spm_data['Scan Size']
-z_sensor_scalig = spm_data['Sens. ZsensSen']
+z_sensor_scaling = spm_data['Sens. ZsensSen']
 ```
 
 Each parameter in the metadata is automatically interpreted into relevant datatypes (numbers, strings etc). 
@@ -67,7 +67,7 @@ plt.show()
 ```
 
 The underlying data is stored as Pint `Quantity` objects which handles the units and support most of the same operations
-as a numpy `ndarray`, such as addition, multiplication etc. with other images although this currently will strip the 
+as a numpy `ndarray`, such as addition, multiplication etc. with other images although this will currently strip the 
 metadata
 ```python
 min_value, max_value = height_im.min(), height_im.max()
