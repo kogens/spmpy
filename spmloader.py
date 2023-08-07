@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import struct
 import warnings
@@ -400,7 +402,7 @@ def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImag
     return images
 
 
-def parse_parameter_value(value_str: str) -> str | int | float | Quantity | list[float, Quantity] | None:
+def parse_parameter_value(value_str: str) -> str | int | float | Quantity | datetime | list[float, Quantity] | None:
     """ Parse parameters into number, string or physical quantity """
 
     # Value is None, return it
