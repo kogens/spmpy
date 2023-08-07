@@ -1,6 +1,7 @@
 # Load SPM files from Bruker AFM Microscopes
 ## Setup
-Requires `numpy` and [`pint`](https://pint.readthedocs.io/) for units, optionally `matplotlib` for plotting examples below
+Requires Python >= 3.9 with `numpy` and [`pint`](https://pint.readthedocs.io/) for units, 
+optionally `matplotlib` for plotting examples below
 ```
 pip install numpy pint matplotlib
 ```
