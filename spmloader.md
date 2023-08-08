@@ -28,7 +28,7 @@ All the metadata is accessible as `spm_data.metadata` where it is organized in t
 SPM file. You can also access any parameter directly by treating `spm_data` as a dict, e.g. 
 ```python
 scan_size = spm_data['Scan Size']
-z_sensor_scaling = spm_data['Sens. ZsensSen']
+z_sensor_scaling = spm_data['Sens. ZsensSens']
 ```
 
 Each parameter in the metadata is automatically interpreted into relevant datatypes (numbers, strings etc). 
