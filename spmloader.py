@@ -62,15 +62,15 @@ class SPMFile:
         # Extract lines and interpret metadata and images
         metadata_lines = extract_metadata_lines(file_bytes)
         metadata = interpret_metadata(metadata_lines)
-        images = extract_ciao_images(metadata, file_bytes)
         self.metadata = metadata
 
         # Construct a "flat metadata" for accessing with __getitem__.
-        # Avoid "Ciao image list" as it appears multiple times
-        non_repeating_keys = [key for key in metadata.keys() if 'Ciao image list' not in key]
-        self._flat_metadata = {k: v for key in non_repeating_keys for k, v in metadata[key].items()}
+        self._flat_metadata = flatten_metadata(metadata)
 
-        self.images = images
+        # Load CIAO images
+        self.images = extract_ciao_images(metadata, file_bytes)
+        for key in self.images:
+            setattr(self, key, self.images[key])  # Make CIAO images accessible as attributes
 
     @property
     def groups(self) -> dict[int | None, dict[str]]:
@@ -97,7 +97,7 @@ class CIAOImage:
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
 
-        self.metadata = image_metadata
+        self.metadata = image_metadata | flatten_metadata(full_metadata)
 
         # Data offset and length refer to the bytes of the original file including metadata
         data_start = image_metadata['Data offset']
@@ -116,7 +116,7 @@ class CIAOImage:
         pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
         # Save Z scale parameter from full metadata
-        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(full_metadata, '2:Z scale')
+        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata('2:Z scale')
         self.metadata.update(zscale_soft_scale)
         self.scansize = full_metadata['Ciao scan list']['Scan Size']
 
@@ -126,9 +126,9 @@ class CIAOImage:
         self.calculate_physical_units()
         self.title = self.metadata['2:Image Data'].internal_designation
 
-    def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
+    def fetch_soft_scale_from_full_metadata(self, key='2:Z scale') -> dict:
         soft_scale_key = self.metadata[key].sscale
-        soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
+        soft_scale_value = self.metadata[soft_scale_key].value
 
         return {soft_scale_key: soft_scale_value}
 
@@ -390,6 +390,15 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
     return metadata
 
 
+def flatten_metadata(metadata: dict) -> dict:
+    """ Construct a "flat metadata" for accessing with __getitem__.
+    Avoid "Ciao image list" as it appears multiple times """
+    non_repeating_keys = [key for key in metadata.keys() if 'Ciao image list' not in key]
+    flat_metadata = {k: v for key in non_repeating_keys for k, v in metadata[key].items()}
+
+    return flat_metadata
+
+
 def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImage]:
     """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
     images = {}
@@ -415,6 +424,7 @@ def parse_parameter_value(value_str: str) -> str | int | float | Quantity | date
     if match_numerical and match_numerical.group(2):
         # Value  is a quantity with unit
         unit = match_numerical.group(2)
+
         # A few units appear as e.g. log(Pa), replace with log_Pa etc.
         if '(' in unit:
             unit = unit.replace('(', '_').replace(')', '')
