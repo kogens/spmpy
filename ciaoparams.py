@@ -120,7 +120,7 @@ class ValueParameter(CIAOParameter):
     rather, another tag appears between the brackets, like [Sens. Zsens]. In that case, you look elsewhere in the
     parameter list for tag and use that parameter's hard-value for the soft-scale.
     """
-    name: str
+
     hard_value: float | str | Quantity
 
     group: int = None
@@ -151,9 +151,9 @@ class SelectParameter(CIAOParameter):
     The Select parameters (identified by the letter “S”) have the following format:
         [Internal-designation for selection] “external-designation for selection”
     """
-    name: str
     internal_designation: str
     external_designation: str
+
     group: int = None
 
     @property
@@ -181,9 +181,9 @@ class ScaleParameter(CIAOParameter):
     Most often used for the Z magnify parm to allow user to change scaling of Z scale in Off-
     line without actually affecting the real data in the file.
     """
-    name: str
     soft_scale: str
     hard_value: str
+
     group: int = None
 
     @property
