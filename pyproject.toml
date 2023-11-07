@@ -1,0 +1,12 @@
+[project]
+name = "spmpy"
+version = "0.0.1"
+description = """ Utility for loading SPM files from Bruker atomic force microscopes (AFM) """
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Nikolaj Ørbæk Langemark" }]
+
+dependencies = [
+    "numpy>=1.23",
+    "pint>=0.22"
+]
