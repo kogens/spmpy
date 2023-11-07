@@ -1,1 +1,1 @@
-from spmloader import SPMFile, CIAOImage, CIAOParameter
+from .spmloader import SPMFile, CIAOImage, CIAOParameter

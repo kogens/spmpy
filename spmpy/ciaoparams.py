@@ -35,6 +35,10 @@ class CIAOParameter:
     def value(self):
         return None
 
+    @property
+    def group(self):
+        return None
+
     @classmethod
     def from_string(cls, ciao_string):
         match = RE_CIAO_PARAM.match(ciao_string)

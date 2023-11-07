@@ -107,7 +107,7 @@ class CIAOImage:
         self.title = self.metadata['2:Image Data'].internal_designation
 
     def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
-        soft_scale_key = self.metadata[key].sscale
+        soft_scale_key = self.metadata[key].soft_scale
         soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
 
         return {soft_scale_key: soft_scale_value}
@@ -117,7 +117,7 @@ class CIAOImage:
         """ Returns the z-scale correction used to translate from "pixel value" to physical units in the image"""
         z_scale = self.metadata['2:Z scale']
         hard_value = z_scale.value
-        soft_scale_key = z_scale.sscale
+        soft_scale_key = z_scale.soft_scale
         soft_scale_value = self.metadata[soft_scale_key]
 
         # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
@@ -265,11 +265,11 @@ def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[
 
         elif line.startswith('@'):
             # Line is CIAO parameter, interpret and add to current section
-            ciaoparam = CIAOParameter(line)
+            ciaoparam = CIAOParameter.from_string(line)
 
             # Note: The "parameter" used as key is not always unique and can appear multiple times with different
             # group number. Usually not an issue for CIAO images, however.
-            key = ciaoparam.parameter if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.parameter}'
+            key = ciaoparam.name if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.name}'
             metadata[current_section][key] = ciaoparam
         else:
             # Line is regular parameter, add to metadata of current section
