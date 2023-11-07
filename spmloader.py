@@ -9,8 +9,7 @@ from os import PathLike
 from pathlib import Path
 
 import numpy as np
-import pint
-from pint import UnitRegistry, Quantity
+from pint import UnitRegistry, Quantity, UnitStrippedWarning, UndefinedUnitError
 
 # Regex for CIAO parameters (lines starting with \@ )
 RE_CIAO_PARAM = re.compile(
@@ -167,7 +166,7 @@ class CIAOImage:
         self.x = np.linspace(0, self.width, n_cols)
 
     def __array__(self) -> np.ndarray:
-        warnings.filterwarnings("ignore", category=pint.UnitStrippedWarning)
+        warnings.filterwarnings("ignore", category=UnitStrippedWarning)
         return self.data.__array__()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -420,7 +419,7 @@ def parse_parameter_value(value_str: str) -> str | int | float | Quantity | date
             unit = unit.replace('(', '_').replace(')', '')
         try:
             return ureg.Quantity(float(match_numerical.group(1)), unit)
-        except pint.UndefinedUnitError:
+        except UndefinedUnitError:
             print(f'Unit not recognized: {match_numerical.group(2)}, parameter not converted: {value_str}')
             return value_str
 
