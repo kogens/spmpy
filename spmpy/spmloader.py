@@ -41,7 +41,7 @@ class SPMFile:
 
         # Extract lines and interpret metadata and images
         metadata_lines = extract_metadata_lines(file_bytes)
-        metadata = interpret_metadata(metadata_lines)
+        metadata = interpret_file_header(metadata_lines)
         images = extract_ciao_images(metadata, file_bytes)
         self.metadata = metadata
 
@@ -243,14 +243,14 @@ def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
         raise ValueError('Beginning or end of "\\*File list" missing, cannot extract metadata')
 
 
-def interpret_metadata(metadata_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, Quantity]]:
+def interpret_file_header(header_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, Quantity]]:
     """ Walk through all lines in metadata and interpret sections beginning with * """
     metadata = {}
     current_section = None
     n_image = 0
 
     # Walk through each line of metadata and extract sections and parameters
-    for line in metadata_lines:
+    for line in header_lines:
         if line.startswith('*'):
             # Lines starting with * indicate a new section
             current_section = line.strip('*')
