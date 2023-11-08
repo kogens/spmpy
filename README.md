@@ -12,7 +12,7 @@ Place the `spmloader.py` file with your script and import the `SPMFile` class.
 The SPM file can be loaded by passing a file path directly to `SPMFile`:
 
 ```python
-from spmloader import SPMFile
+from spmpy.spmloader import SPMFile
 
 # Pass a path to SPMFile to load the data
 spm_data = SPMFile('afm_testfile.spm')
