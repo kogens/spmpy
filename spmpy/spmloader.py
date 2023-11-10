@@ -8,7 +8,7 @@ import numpy as np
 from pint import Quantity
 
 from .ciaoparams import CIAOParameter
-from .utils import parse_parameter_value
+from .utils import interpret_file_header
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
@@ -30,8 +30,6 @@ class SPMFile:
 
         self.header: dict = self.parse_header(bytestring)
         self.images: dict = self.extract_ciao_images(self.header, bytestring)
-
-        self._integer_size = INTEGER_SIZE
 
     def __repr__(self) -> str:
         titles = [x for x in self.images.keys()]
@@ -73,10 +71,7 @@ class SPMFile:
     @staticmethod
     def parse_header(bytestring) -> dict:
         """ Extract metadata from the file header """
-        metadata_lines = extract_metadata_lines(bytestring)
-        header = interpret_file_header(metadata_lines)
-
-        return header
+        return interpret_file_header(bytestring)
 
     @staticmethod
     def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImage]:
@@ -244,64 +239,3 @@ class CIAOImage:
     @property
     def meshgrid(self) -> np.meshgrid:
         return np.meshgrid(self.x, self.y)
-
-
-def extract_metadata_lines(spm_bytestring: bytes) -> list[str]:
-    """ Extract the metadata section between "*File list" and "*File list end" and decode and cleanup the lines """
-    # Extract lines as list of bytestrings
-    file_lines = spm_bytestring.splitlines()
-
-    start_index, end_index = None, None
-    for i, line in enumerate(file_lines):
-        if line.strip() == b'\\*File list':
-            start_index = i
-        elif line.strip() == b'\\*File list end':
-            end_index = i
-            break
-
-    if start_index is not None and end_index is not None:
-        # Extract the identified lines between start and end. Decode strings and strip unwanted characters.
-        metadata_lines = [x.decode('latin-1').lstrip('\\') for x in file_lines[start_index:end_index]]
-        return metadata_lines
-    else:
-        raise ValueError('Beginning or end of "\\*File list" missing, cannot extract metadata')
-
-
-def interpret_file_header(header_lines: list[str], sort=False) -> dict[str, dict[str, int, float, str, Quantity]]:
-    """ Walk through all lines in metadata and interpret sections beginning with * """
-    metadata = {}
-    current_section = None
-    n_image = 0
-
-    # Walk through each line of metadata and extract sections and parameters
-    for line in header_lines:
-        if line.startswith('*'):
-            # Lines starting with * indicate a new section
-            current_section = line.strip('*')
-
-            # "Ciao image list" appears multiple times, so we give them a number
-            if current_section == 'Ciao image list':
-                current_section = f'Ciao image list {n_image}'
-                n_image += 1
-
-            # Initialize an empty dict to contain metadata for each section
-            metadata[current_section] = {}
-
-        elif line.startswith('@'):
-            # Line is CIAO parameter, interpret and add to current section
-            ciaoparam = CIAOParameter.from_string(line)
-
-            # Note: The "parameter" used as key is not always unique and can appear multiple times with different
-            # group number. Usually not an issue for CIAO images, however.
-            key = ciaoparam.name if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.name}'
-            metadata[current_section][key] = ciaoparam
-        else:
-            # Line is regular parameter, add to metadata of current section
-            key, value = line.split(':', 1)
-            metadata[current_section][key] = parse_parameter_value(value)
-
-    if sort:
-        for key, value in metadata.items():
-            metadata[key] = dict(sorted(metadata[key].items()))
-
-    return metadata
