@@ -17,46 +17,42 @@ INTEGER_SIZE = 2 ** 32
 class SPMFile:
     """ Representation of an entire SPM file with images and metadata """
 
-    def __init__(self, path: str | PathLike):
-        self.path = Path(path)
-        self.metadata = {}
-        self.images = {}
-        self._flat_metadata = {}
-        self._integer_size = INTEGER_SIZE
+    def __new__(cls, *args, **kwargs):
+        """ If class is instanced with a single parameter, it is either a path or bytestring """
+        if len(args) == 1 and isinstance(args[0], (str, Path)):
+            return cls.from_path(args[0])
+        else:
+            return super().__new__(cls)
 
-        self.load_spm()
+    def __init__(self, bytestring: bytes, path: str | PathLike = None):
+        if path:
+            self.path: Path = Path(path)
+
+        self.header: dict = self.parse_header(bytestring)
+        self.images: dict = self.extract_ciao_images(self.header, bytestring)
+
+        self._integer_size = INTEGER_SIZE
 
     def __repr__(self) -> str:
         titles = [x for x in self.images.keys()]
-        return f'SPM file: "{self.path.name}", {self["Date"]}. Images: {titles}'
+        return f'SPM file: {self["Date"]}. Images: {titles}'
 
     def __getitem__(self, item) -> tuple[int, float, str, Quantity]:
         """ Fetches values from the metadata when class is called like a dict """
-        return self._flat_metadata[item]
+        return self._flat_header[item]
 
-    def load_spm(self):
-        """ Load an SPM file and extract images and metadata """
-        with open(self.path, 'rb') as f:
-            file_bytes = f.read()
-
-        # Extract lines and interpret metadata and images
-        metadata_lines = extract_metadata_lines(file_bytes)
-        metadata = interpret_file_header(metadata_lines)
-        images = extract_ciao_images(metadata, file_bytes)
-        self.metadata = metadata
-
-        # Construct a "flat metadata" for accessing with __getitem__.
-        # Avoid "Ciao image list" as it appears multiple times
-        non_repeating_keys = [key for key in metadata.keys() if 'Ciao image list' not in key]
-        self._flat_metadata = {k: v for key in non_repeating_keys for k, v in metadata[key].items()}
-
-        self.images = images
+    @property
+    def _flat_header(self):
+        """ Construct a "flat metadata" for accessing with __getitem__.
+        Avoid "Ciao image list" as it appears multiple times """
+        non_repeating_keys = [key for key in self.header.keys() if 'Ciao image list' not in key]
+        return {k: v for key in non_repeating_keys for k, v in self.header[key].items()}
 
     @property
     def groups(self) -> dict[int | None, dict[str]]:
         """ CIAO parameters ordered by group number """
         groups = {}
-        for key, value in sorted(self._flat_metadata.items()):
+        for key, value in sorted(self._flat_header.items()):
             if isinstance(value, CIAOParameter):
                 if value.group in groups.keys():
                     groups[value.group].update({key.split(':', 1)[-1]: value})
@@ -65,6 +61,34 @@ class SPMFile:
                     groups[value.group].update({key.split(':', 1)[-1]: value})
 
         return groups
+
+    @classmethod
+    def from_path(cls, path):
+        """ Load SPM data from a file on disk """
+        with open(path, 'rb') as f:
+            bytestring = f.read()
+
+        return cls(bytestring, path=path)
+
+    @staticmethod
+    def parse_header(bytestring) -> dict:
+        """ Extract metadata from the file header """
+        metadata_lines = extract_metadata_lines(bytestring)
+        header = interpret_file_header(metadata_lines)
+
+        return header
+
+    @staticmethod
+    def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImage]:
+        """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
+        images = {}
+        image_sections = {k: v for k, v in metadata.items() if k.startswith('Ciao image')}
+        for i, image_metadata in enumerate(image_sections.values()):
+            image = CIAOImage(image_metadata, metadata, file_bytes)
+            key = image_metadata['2:Image Data'].internal_designation
+            images[key] = image
+
+        return images
 
 
 class CIAOImage:
@@ -281,15 +305,3 @@ def interpret_file_header(header_lines: list[str], sort=False) -> dict[str, dict
             metadata[key] = dict(sorted(metadata[key].items()))
 
     return metadata
-
-
-def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImage]:
-    """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
-    images = {}
-    image_sections = {k: v for k, v in metadata.items() if k.startswith('Ciao image')}
-    for i, image_metadata in enumerate(image_sections.values()):
-        image = CIAOImage(image_metadata, metadata, file_bytes)
-        key = image_metadata['2:Image Data'].internal_designation
-        images[key] = image
-
-    return images
