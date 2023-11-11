@@ -8,7 +8,7 @@ import numpy as np
 from pint import Quantity
 
 from .ciaoparams import CIAOParameter
-from .utils import interpret_file_header
+from .utils import parse_parameter_value
 
 # Integer size used when decoding data from raw bytestrings
 INTEGER_SIZE = 2 ** 32
@@ -239,3 +239,48 @@ class CIAOImage:
     @property
     def meshgrid(self) -> np.meshgrid:
         return np.meshgrid(self.x, self.y)
+
+
+def interpret_file_header(header_bytetring: bytes, encoding: str = 'latin-1') \
+        -> dict[str, dict[str, int, float, str, Quantity]]:
+    """ Walk through all lines in metadata and interpret sections beginning with * """
+    header_lines = header_bytetring.splitlines()
+
+    metadata = {}
+    current_section = None
+    n_image = 0
+
+    # Walk through each line of metadata and extract sections and parameters
+    for line in header_lines:
+        if line.startswith(b'\\*File list end'):
+            # End of header, break out of loop
+            break
+
+        line = line.decode(encoding).lstrip('\\')
+        if line.startswith('*'):
+            # Lines starting with * indicate a new section
+            current_section = line.strip('*')
+
+            # "Ciao image list" appears multiple times, so we give them a number
+            if current_section == 'Ciao image list':
+                current_section = f'Ciao image list {n_image}'
+                n_image += 1
+
+            # Initialize an empty dict to contain metadata for each section
+            metadata[current_section] = {}
+
+        elif line.startswith('@'):
+            # Line is CIAO parameter, interpret and add to current section
+            ciaoparam = CIAOParameter.from_string(line)
+
+            # Note: The "parameter" used as key is not always unique and can appear multiple times with different
+            # group number. Usually not an issue for CIAO images, however.
+            key = ciaoparam.name if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.name}'
+            metadata[current_section][key] = ciaoparam
+
+        else:
+            # Line is regular parameter, add to metadata of current section
+            key, value = line.split(':', 1)
+            metadata[current_section][key] = parse_parameter_value(value)
+
+    return metadata
