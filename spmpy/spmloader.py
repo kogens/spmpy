@@ -91,7 +91,8 @@ class CIAOImage:
     # TODO: Revisit how the "corrected zscale" is fetched from the file header
     # TODO: Revisit how aspect ratio is used so we don't elongate images
 
-    def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
+    def __init__(self, file_bytes: bytes, file_header: dict, image_number: int, int_size: int = INTEGER_SIZE):
+        self._integer_size = int_size
         try:
             # Get appropriate image header from the list of images based on image_number
             self.image_header = file_header['Ciao image list'][image_number]
@@ -111,7 +112,8 @@ class CIAOImage:
 
         self.width = None
         self.height = None
-        self.data = None
+        # self.data = None
+
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
 
@@ -141,19 +143,24 @@ class CIAOImage:
         return raw_image
 
     @property
-    def corrected_zscale(self):
-        """ Returns the z-scale correction used to translate from "pixel value" to physical units in the image"""
-        z_scale = self.image_header['2:Z scale']
-        hard_value = z_scale.value
-        soft_scale_key = z_scale.soft_scale
-        soft_scale_value = self._flat_header[soft_scale_key].value
+    def image(self):
+        """
+        Image data with physical units.
 
-        # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
-        # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
-        # NOTE: Documentation says divide by 2^16, but 2^32 gives proper results...?
-        corrected_hard_scale = hard_value / INTEGER_SIZE
+        From manual:
+            To convert raw data into metric units, use the following relation:
+                Z height = (data point value)(Z scale)(Sens. Zscan)/2^16
 
-        return corrected_hard_scale * soft_scale_value
+            Note: The Z scale value in a parameter list includes the value and the units (for example, \\Z scale:
+            1.57541 µm). In this example, the units of measure are in microns (µm).
+        """
+        # z_scale_key = self['Z magnify'].soft_scale  # Possibly more general way to get "2:Z Scale" key
+        z_scale = self['2:Z scale']
+        sens_z_scan = self[z_scale.soft_scale]
+
+        z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / self._integer_size
+
+        return z_height
 
     @property
     def _flat_header(self):
@@ -164,9 +171,15 @@ class CIAOImage:
         return flat_header
 
     def calculate_physical_units(self):
-        """ Calculate physical scale of image values """
-        self.data = self._raw_image * self.corrected_zscale
+        """
+        Calculate physical scale of image values.
 
+        From manual:
+            To obtain the X axis pixel width, use the following relation:
+                X = Scan size / ((Samples/line) - 1)
+                Y = Scan size / ((Number of Lines) - 1)
+
+        """
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
         n_rows, n_cols = self._raw_image.shape
