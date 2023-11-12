@@ -173,8 +173,8 @@ class CIAOImage:
         aspect_ratio = (max(self._raw_image.shape) / n_rows, max(self._raw_image.shape) / n_cols)
 
         # Calculate pixel sizes and
-        self.px_size_y = self.scansize / (n_rows - 1) / aspect_ratio[0]
-        self.px_size_x = self.scansize / (n_cols - 1) / aspect_ratio[1]
+        self.px_size_y = self.scansize[0] / (n_rows - 1) / aspect_ratio[0]
+        self.px_size_x = self.scansize[1] / (n_cols - 1) / aspect_ratio[1]
 
         self.height = (n_rows - 1) * self.px_size_y
         self.width = (n_cols - 1) * self.px_size_x
