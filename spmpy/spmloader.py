@@ -28,7 +28,8 @@ class SPMFile:
 
     def __repr__(self) -> str:
         titles = [x for x in self.images.keys()]
-        return f'SPM file: {self["Date"]}. Images: {titles}'
+        path = f'{self.path.name}, ' if hasattr(self, 'path') else ''
+        return f'SPM file: {path}{self["Date"]}. Images: {titles}'
 
     def __getitem__(self, item) -> tuple[int, float, str, Quantity]:
         """ Fetches values from the header when class is called like a dict """
