@@ -93,7 +93,11 @@ class CIAOImage:
 
     def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
         self.file_header = file_header
-        self.image_header = file_header['Ciao image list'][image_number]
+        try:
+            self.image_header = file_header['Ciao image list'][image_number]
+        except IndexError as e:
+            raise IndexError('CIAO image not in header, specify image number '
+                             f'between 0 and {len(file_header["Ciao image list"]) - 1}') from e
 
         # Convert bytes into pixel values
         self._raw_image = self.raw_image_from_bytes(file_bytes)
@@ -139,6 +143,8 @@ class CIAOImage:
         ...
 
     def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
+        # TODO: Make the lookup when extracting metadata from the file, store within each CIAOparameter
+        #  in the soft_scale_value attribute
         soft_scale_key = self.image_header[key].soft_scale
         soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
 
