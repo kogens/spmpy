@@ -85,30 +85,41 @@ class SPMFile:
 
 
 class CIAOImage:
-    """ A CIAO image with metadata"""
+    """ A CIAO image with metadata """
 
     # TODO: Revisit how aspect ratio is used so we don't elongate images
     # TODO: Move logic for converting bytes to image into separate methods
+    # TODO: Validate conversion from bytes to physical units
 
     def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
+        self.file_header = file_header
+        self.image_header = file_header['Ciao image list'][image_number]
+
+        # Convert bytes into pixel values
+        self._raw_image = self.raw_image_from_bytes(file_bytes)
+
+        # Save Z scale parameter from full metadata
+        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(file_header, '2:Z scale')
+        self.image_header.update(zscale_soft_scale)
+        self.scansize = file_header['Ciao scan list']['Scan Size']
+
         self.width = None
         self.height = None
         self.data = None
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
 
-        self.file_header = file_header
-        self.image_header = file_header['Ciao image list'][image_number]
+        self.calculate_physical_units()
+        self.title = self.image_header['2:Image Data'].internal_designation
 
-        image_metadata = self.image_header
-
+    def raw_image_from_bytes(self, file_bytes):
         # Data offset and length refer to the bytes of the original file including metadata
-        data_start = image_metadata['Data offset']
-        data_length = image_metadata['Data length']
+        data_start = self.image_header['Data offset']
+        data_length = self.image_header['Data length']
 
         # Calculate the number of pixels in order to decode the bytestring.
         # Note: "Bytes/pixel" is defined in the metadata but byte lengths don't seem to follow the bytes/pixel it.
-        n_rows, n_cols = image_metadata['Number of lines'], image_metadata['Samps/line']
+        n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
         n_pixels = n_cols * n_rows
 
         # Extract relevant image data from the raw bytestring of the full file and decode the byte values
@@ -118,16 +129,14 @@ class CIAOImage:
         bytestring = file_bytes[data_start: data_start + data_length]
         pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
-        # Save Z scale parameter from full metadata
-        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(file_header, '2:Z scale')
-        self.image_header.update(zscale_soft_scale)
-        self.scansize = file_header['Ciao scan list']['Scan Size']
-
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         # Row order is reversed in stored data, so we flip up/down.
-        self._raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
-        self.calculate_physical_units()
-        self.title = self.image_header['2:Image Data'].internal_designation
+        raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
+
+        return raw_image
+
+    def decode_bytes_to_image(self):
+        ...
 
     def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
         soft_scale_key = self.image_header[key].soft_scale
