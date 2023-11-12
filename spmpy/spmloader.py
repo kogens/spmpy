@@ -112,7 +112,6 @@ class CIAOImage:
 
         self.width = None
         self.height = None
-        # self.data = None
 
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
@@ -214,58 +213,58 @@ class CIAOImage:
 
     def __array__(self) -> np.ndarray:
         # warnings.filterwarnings("ignore", category=UnitStrippedWarning)
-        return self.data.__array__()
+        return self.image.__array__()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return getattr(self.data, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
+        return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | Quantity:
         """ Access parameters directly by key from flattened header """
         return self._flat_header[key]
 
     def __repr__(self) -> str:
-        reprstr = (f'{self.image_header["Data type"]} image "{self.title}" [{self.data.units}], '
-                   f'{self.data.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
+        reprstr = (f'{self.image_header["Data type"]} image "{self.title}" [{self.image.units}], '
+                   f'{self.image.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
 
     def __str__(self):
         return self.__repr__()
 
     def __getattr__(self, name):
-        return getattr(self.data, name)
+        return getattr(self.image, name)
 
     def __add__(self, other):
         if isinstance(other, CIAOImage):
-            return self.data + other.data
+            return self.image + other.image
         else:
-            return self.data + other
+            return self.image + other
 
     def __radd__(self, other):
         return self.__add__(other)
 
     def __sub__(self, other):
         if isinstance(other, CIAOImage):
-            return self.data - other.data
+            return self.image - other.image
         else:
-            return self.data - other
+            return self.image - other
 
     def __rsub__(self, other):
         return self.__sub__(other)
 
     def __mul__(self, other):
         if isinstance(other, CIAOImage):
-            return self.data * other.data
+            return self.image * other.image
         else:
-            return self.data * other
+            return self.image * other
 
     def __rmul__(self, other):
         return self.__mul__(other)
 
     def __truediv__(self, other):
         if isinstance(other, CIAOImage):
-            return self.data / other.data
+            return self.image / other.image
         else:
-            return self.data / other
+            return self.image / other
 
     def __rtruediv__(self, other):
         return self.__truediv__(other)
