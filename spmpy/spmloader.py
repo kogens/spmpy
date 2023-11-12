@@ -34,13 +34,13 @@ class SPMFile:
         return f'SPM file: {self["Date"]}. Images: {titles}'
 
     def __getitem__(self, item) -> tuple[int, float, str, Quantity]:
-        """ Fetches values from the metadata when class is called like a dict """
+        """ Fetches values from the header when class is called like a dict """
         return self._flat_header[item]
 
     @property
     def _flat_header(self):
-        """ Construct a "flat metadata" for accessing with __getitem__.
-        Avoid "Ciao image list" as it appears multiple times """
+        """ Construct a "flat header" for accessing with __getitem__.
+        Avoid "Ciao image list" as it appears multiple times with non-unique keys """
         non_repeating_keys = [key for key in self.header.keys() if 'Ciao image list' not in key]
         return {k: v for key in non_repeating_keys for k, v in self.header[key].items()}
 
@@ -68,24 +68,24 @@ class SPMFile:
 
     @staticmethod
     def parse_header(bytestring) -> dict:
-        """ Extract metadata from the file header """
+        """ Extract data in header from bytes """
         return interpret_file_header(bytestring)
 
     @staticmethod
     def extract_ciao_images(header: dict, bytestring: bytes) -> dict[str, CIAOImage]:
-        """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
+        """ Data for CIAO images are found using each image header from the Ciao image section in the file header """
         images = {}
         image_sections = header['Ciao image list']
-        for i, image_metadata in enumerate(image_sections):
+        for i, image_header in enumerate(image_sections):
             image = CIAOImage(bytestring, header, image_number=i)
-            key = image_metadata['2:Image Data'].internal_designation
+            key = image_header['2:Image Data'].internal_designation
             images[key] = image
 
         return images
 
 
 class CIAOImage:
-    """ A CIAO image with metadata """
+    """ A CIAO image with header """
 
     # TODO: Validate conversion from bytes to physical units
     # TODO: Revisit how the "corrected zscale" is fetched from the file header
@@ -93,16 +93,20 @@ class CIAOImage:
 
     def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
         try:
+            # Get appropriate image header from the list of images based on image_number
             self.image_header = file_header['Ciao image list'][image_number]
         except IndexError as e:
             raise IndexError('CIAO image not in header, specify image number '
                              f'between 0 and {len(file_header["Ciao image list"]) - 1}') from e
 
+        # Drop all Ciao image headers from the file header
         self.file_header = {key: value for key, value in file_header.items() if key not in 'Ciao image list'}
 
         # Convert bytes into raw pixel values (without physical units)
         self._raw_image = self.raw_image_from_bytes(file_bytes)
 
+        # Some handy attributes are defined below for ease of use
+        self.title = self.image_header['2:Image Data'].external_designation
         self.scansize = self._flat_header['Scan Size']
 
         self.width = None
@@ -112,15 +116,14 @@ class CIAOImage:
         self.x, self.y = None, None
 
         self.calculate_physical_units()
-        self.title = self.image_header['2:Image Data'].internal_designation
 
     def raw_image_from_bytes(self, file_bytes):
-        # Data offset and length refer to the bytes of the original file including metadata
+        # Data offset and length refer to the bytes of the original file including header
         data_start = self.image_header['Data offset']
         data_length = self.image_header['Data length']
 
         # Calculate the number of pixels in order to decode the bytestring.
-        # Note: "Bytes/pixel" is defined in the metadata but byte lengths don't seem to follow the bytes/pixel it.
+        # Note: "Bytes/pixel" is defined in the header but byte lengths don't seem to follow the bytes/pixel it.
         n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
         n_pixels = n_cols * n_rows
 
@@ -154,7 +157,7 @@ class CIAOImage:
 
     @property
     def _flat_header(self):
-        """ Construct a "flat metadata" for accessing with __getitem__. """
+        """ Construct a "flat header" for accessing with __getitem__. """
         flat_header = {k: v for key in self.file_header.keys() for k, v in self.file_header[key].items()}
         flat_header.update(self.image_header)
 
@@ -249,34 +252,34 @@ class CIAOImage:
 
 def interpret_file_header(header_bytestring: bytes, encoding: str = 'latin-1') \
         -> dict[str, dict[str, int, float, str, Quantity]]:
-    """ Walk through all lines in metadata and interpret sections beginning with * """
+    """ Walk through all lines in header and interpret sections beginning with * """
     header_lines = header_bytestring.splitlines()
 
-    metadata = {'Ciao image list': []}
+    header = {'Ciao image list': []}
     current_section = None
-    current_metadata = {}
+    current_header = {}
     n_image = 0
 
-    # Walk through each line of metadata and extract sections and parameters
+    # Walk through each line of header and extract sections and parameters
     for line_bytes in header_lines:
         line = line_bytes.decode(encoding).lstrip('\\')
         if line.startswith('*'):
             # Lines starting with * indicate a new section
             if current_section == 'Ciao image list':
-                # If the section is an image list, append metadata to relevant list
-                metadata[current_section].append(current_metadata)
+                # If the section is an image list, append previous header section to relevant list
+                header[current_section].append(current_header)
                 n_image += 1
             elif current_section is not None:
-                # If section is a "regular" section, add metadata entry with section as key
-                metadata[current_section] = current_metadata
+                # If section is a "regular" section, add header entry with section as key
+                header[current_section] = current_header
 
             if line_bytes == b'\\*File list end':
                 # End of header, break out of loop
                 break
 
-            # Get current secition and initialize an empty dict to contain metadata for each section
+            # Get current secition and initialize an empty dict to contain header for each section
             current_section = line.strip('*')
-            current_metadata = {}
+            current_header = {}
 
         elif line.startswith('@'):
             # Line is CIAO parameter, interpret and add to current section
@@ -284,10 +287,10 @@ def interpret_file_header(header_bytestring: bytes, encoding: str = 'latin-1') \
 
             # The key must include the group number as the same name can appear multiple times
             key = ciaoparam.name if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.name}'
-            current_metadata[key] = ciaoparam
+            current_header[key] = ciaoparam
         else:
-            # Line is regular parameter, add to metadata of current section
+            # Line is regular parameter, add to header of current section
             key, value = line.split(':', 1)
-            current_metadata[key] = parse_parameter_value(value)
+            current_header[key] = parse_parameter_value(value)
 
-    return metadata
+    return header
