@@ -10,9 +10,6 @@ from pint import Quantity
 from .ciaoparams import CIAOParameter
 from .utils import parse_parameter_value
 
-# Integer size used when decoding data from raw bytestrings
-INTEGER_SIZE = 2 ** 32
-
 
 class SPMFile:
     """ Representation of an entire SPM file with images and metadata """
@@ -87,12 +84,7 @@ class SPMFile:
 class CIAOImage:
     """ A CIAO image with header """
 
-    # TODO: Validate conversion from bytes to physical units
-    # TODO: Revisit how the "corrected zscale" is fetched from the file header
-    # TODO: Revisit how aspect ratio is used so we don't elongate images
-
-    def __init__(self, file_bytes: bytes, file_header: dict, image_number: int, int_size: int = INTEGER_SIZE):
-        self._integer_size = int_size
+    def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
         try:
             # Get appropriate image header from the list of images based on image_number
             self.image_header = file_header['Ciao image list'][image_number]
@@ -108,7 +100,7 @@ class CIAOImage:
 
         # Some handy attributes are defined below for ease of use
         self.title = self.image_header['2:Image Data'].external_designation
-        self.scansize = self._flat_header['Scan Size']
+        self.scansize = self.image_header['Scan Size']
 
         self.width = None
         self.height = None
@@ -124,9 +116,8 @@ class CIAOImage:
         Calculate bytes/pixel based on data length and number of rows and columns.
         Note: This is often different from the "Bytes/pixel" parameter in the header, but this seems to be the
         correct way to identify it.
-
-        See discussion from Gwyddion mailing list
-        https://sourceforge.net/p/gwyddion/mailman/gwyddion-users/thread/YyCVZDIMBXv7CgC5%40physics.muni.cz/#msg37706696
+        See also discussion from pySPM
+        https://github.com/scholi/pySPM/issues/1
         """
         data_length = self.image_header['Data length']
         n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
@@ -136,6 +127,9 @@ class CIAOImage:
     def raw_image_from_bytes(self, file_bytes):
         """
         Decode image bytes into raw pixel values (unscaled, no units).
+
+        See discussion from Gwyddion mailing list
+        https://sourceforge.net/p/gwyddion/mailman/gwyddion-users/thread/YyCVZDIMBXv7CgC5%40physics.muni.cz/#msg37706696
         """
         # Data offset and length refer to the bytes of the original file including header
         data_start = self.image_header['Data offset']
@@ -173,8 +167,7 @@ class CIAOImage:
         # z_scale_key = self['Z magnify'].soft_scale  # Possibly more general way to get "2:Z Scale" key
         z_scale = self['2:Z scale']
         sens_z_scan = self[z_scale.soft_scale]
-
-        z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / self._integer_size
+        z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / 2 ** (8 * self._bytes_per_pixel)
 
         return z_height
 
