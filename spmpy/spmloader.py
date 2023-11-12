@@ -87,25 +87,23 @@ class SPMFile:
 class CIAOImage:
     """ A CIAO image with metadata """
 
-    # TODO: Revisit how aspect ratio is used so we don't elongate images
-    # TODO: Move logic for converting bytes to image into separate methods
     # TODO: Validate conversion from bytes to physical units
+    # TODO: Revisit how the "corrected zscale" is fetched from the file header
+    # TODO: Revisit how aspect ratio is used so we don't elongate images
 
     def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
-        self.file_header = file_header
         try:
             self.image_header = file_header['Ciao image list'][image_number]
         except IndexError as e:
             raise IndexError('CIAO image not in header, specify image number '
                              f'between 0 and {len(file_header["Ciao image list"]) - 1}') from e
 
-        # Convert bytes into pixel values
+        self.file_header = {key: value for key, value in file_header.items() if key not in 'Ciao image list'}
+
+        # Convert bytes into raw pixel values (without physical units)
         self._raw_image = self.raw_image_from_bytes(file_bytes)
 
-        # Save Z scale parameter from full metadata
-        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(file_header, '2:Z scale')
-        self.image_header.update(zscale_soft_scale)
-        self.scansize = file_header['Ciao scan list']['Scan Size']
+        self.scansize = self._flat_header['Scan Size']
 
         self.width = None
         self.height = None
@@ -139,24 +137,13 @@ class CIAOImage:
 
         return raw_image
 
-    def decode_bytes_to_image(self):
-        ...
-
-    def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
-        # TODO: Make the lookup when extracting metadata from the file, store within each CIAOparameter
-        #  in the soft_scale_value attribute
-        soft_scale_key = self.image_header[key].soft_scale
-        soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
-
-        return {soft_scale_key: soft_scale_value}
-
     @property
     def corrected_zscale(self):
         """ Returns the z-scale correction used to translate from "pixel value" to physical units in the image"""
         z_scale = self.image_header['2:Z scale']
         hard_value = z_scale.value
         soft_scale_key = z_scale.soft_scale
-        soft_scale_value = self.image_header[soft_scale_key]
+        soft_scale_value = self._flat_header[soft_scale_key].value
 
         # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
         # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
@@ -164,6 +151,14 @@ class CIAOImage:
         corrected_hard_scale = hard_value / INTEGER_SIZE
 
         return corrected_hard_scale * soft_scale_value
+
+    @property
+    def _flat_header(self):
+        """ Construct a "flat metadata" for accessing with __getitem__. """
+        flat_header = {k: v for key in self.file_header.keys() for k, v in self.file_header[key].items()}
+        flat_header.update(self.image_header)
+
+        return flat_header
 
     def calculate_physical_units(self):
         """ Calculate physical scale of image values """
@@ -192,16 +187,8 @@ class CIAOImage:
         return getattr(self.data, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | Quantity:
-        # Return metadata by exact key
-        if key in self.image_header:
-            return self.image_header[key]
-
-        # If key is not found, try without group numbers in metadata keys
-        merged_keys = {k.split(':', 1)[-1]: k for k in self.image_header.keys()}
-        if key in merged_keys:
-            return self.image_header[merged_keys[key]]
-        else:
-            raise KeyError(f'Key not found: {key}')
+        """ Access parameters directly by key from flattened header """
+        return self._flat_header[key]
 
     def __repr__(self) -> str:
         reprstr = (f'{self.image_header["Data type"]} image "{self.title}" [{self.data.units}], '
