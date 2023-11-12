@@ -15,7 +15,7 @@ pip install git+https://github.com/kogens/spmpy
 
 
 ## Loading SPM files
-An .spm file is represented by the `SPMFile`class and can be loaded by passing the path directly to `SPMFile`:
+An .spm file is represented by the `SPMFile` class and can be loaded by passing the path directly to `SPMFile`:
 
 ```python
 >>> from spmpy import SPMFile
