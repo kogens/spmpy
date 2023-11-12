@@ -119,26 +119,43 @@ class CIAOImage:
 
         self.calculate_physical_units()
 
+    @property
+    def _bytes_per_pixel(self):
+        """
+        Calculate bytes/pixel based on data length and number of rows and columns.
+        Note: This is often different from the "Bytes/pixel" parameter in the header, but this seems to be the
+        correct way to identify it.
+
+        See discussion from Gwyddion mailing list
+        https://sourceforge.net/p/gwyddion/mailman/gwyddion-users/thread/YyCVZDIMBXv7CgC5%40physics.muni.cz/#msg37706696
+        """
+        data_length = self.image_header['Data length']
+        n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
+
+        return data_length / (n_rows * n_cols)
+
     def raw_image_from_bytes(self, file_bytes):
+        """
+        Decode image bytes into raw pixel values (unscaled, no units).
+        """
         # Data offset and length refer to the bytes of the original file including header
         data_start = self.image_header['Data offset']
         data_length = self.image_header['Data length']
 
         # Calculate the number of pixels in order to decode the bytestring.
-        # Note: "Bytes/pixel" is defined in the header but byte lengths don't seem to follow the bytes/pixel it.
         n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
-        n_pixels = n_cols * n_rows
+        n_pixels = n_rows * n_cols
 
-        # Extract relevant image data from the raw bytestring of the full file and decode the byte values
-        # as signed 32-bit integers in little-endian (same as "least significant bit").
-        # Note that this is despite documentation saying 16-bit signed int.
+        # Construct a dict for translating bytes/pixel into the corresponding letter for struct
         # https://docs.python.org/3/library/struct.html#format-characters
+        bpp = {2: 'h', 4: 'i', 8: 'q'}[self._bytes_per_pixel]
         bytestring = file_bytes[data_start: data_start + data_length]
-        pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
-        # Reorder image into a numpy array and calculate the physical value of each pixel.
-        # Row order is reversed in stored data, so we flip up/down.
-        raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
+        # Decode raw pixel values from bytes
+        pixel_values = struct.unpack(f'<{n_pixels}{bpp}', bytestring)
+
+        # Reorder image into a numpy array and calculate the physical value of each pixel
+        raw_image = np.array(pixel_values).reshape(n_cols, n_rows)
 
         return raw_image
 
