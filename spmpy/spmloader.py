@@ -154,7 +154,7 @@ class CIAOImage:
         pixel_values = struct.unpack(f'<{n_pixels}{bpp}', bytestring)
 
         # Reorder image into a numpy array and calculate the physical value of each pixel
-        raw_image = np.array(pixel_values).reshape(n_cols, n_rows)
+        raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
 
         return raw_image
 
