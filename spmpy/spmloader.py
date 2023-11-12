@@ -75,10 +75,9 @@ class SPMFile:
     def extract_ciao_images(header: dict, bytestring: bytes) -> dict[str, CIAOImage]:
         """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
         images = {}
-        # image_sections = {k: v for k, v in header.items() if k.startswith('Ciao image')}
         image_sections = header['Ciao image list']
         for i, image_metadata in enumerate(image_sections):
-            image = CIAOImage(image_metadata, header, bytestring)
+            image = CIAOImage(bytestring, header, image_number=i)
             key = image_metadata['2:Image Data'].internal_designation
             images[key] = image
 
@@ -88,18 +87,20 @@ class SPMFile:
 class CIAOImage:
     """ A CIAO image with metadata"""
 
-    # TODO: Make construction simpler, e.g. pass only bytestring and start/end bytes
     # TODO: Revisit how aspect ratio is used so we don't elongate images
     # TODO: Move logic for converting bytes to image into separate methods
 
-    def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
+    def __init__(self, file_bytes: bytes, file_header: dict, image_number: int):
         self.width = None
         self.height = None
         self.data = None
         self.px_size_x, self.px_size_y = None, None
         self.x, self.y = None, None
 
-        self.metadata = image_metadata
+        self.file_header = file_header
+        self.image_header = file_header['Ciao image list'][image_number]
+
+        image_metadata = self.image_header
 
         # Data offset and length refer to the bytes of the original file including metadata
         data_start = image_metadata['Data offset']
@@ -118,18 +119,18 @@ class CIAOImage:
         pixel_values = struct.unpack(f'<{n_pixels}i', bytestring)
 
         # Save Z scale parameter from full metadata
-        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(full_metadata, '2:Z scale')
-        self.metadata.update(zscale_soft_scale)
-        self.scansize = full_metadata['Ciao scan list']['Scan Size']
+        zscale_soft_scale = self.fetch_soft_scale_from_full_metadata(file_header, '2:Z scale')
+        self.image_header.update(zscale_soft_scale)
+        self.scansize = file_header['Ciao scan list']['Scan Size']
 
         # Reorder image into a numpy array and calculate the physical value of each pixel.
         # Row order is reversed in stored data, so we flip up/down.
         self._raw_image = np.flipud(np.array(pixel_values).reshape(n_rows, n_cols))
         self.calculate_physical_units()
-        self.title = self.metadata['2:Image Data'].internal_designation
+        self.title = self.image_header['2:Image Data'].internal_designation
 
     def fetch_soft_scale_from_full_metadata(self, full_metadata, key='2:Z scale') -> dict:
-        soft_scale_key = self.metadata[key].soft_scale
+        soft_scale_key = self.image_header[key].soft_scale
         soft_scale_value = full_metadata['Ciao scan list'][soft_scale_key].value
 
         return {soft_scale_key: soft_scale_value}
@@ -137,10 +138,10 @@ class CIAOImage:
     @property
     def corrected_zscale(self):
         """ Returns the z-scale correction used to translate from "pixel value" to physical units in the image"""
-        z_scale = self.metadata['2:Z scale']
+        z_scale = self.image_header['2:Z scale']
         hard_value = z_scale.value
         soft_scale_key = z_scale.soft_scale
-        soft_scale_value = self.metadata[soft_scale_key]
+        soft_scale_value = self.image_header[soft_scale_key]
 
         # The "hard scale" is used to calculate the physical value. The hard scale given in the line must be ignored,
         # and a corrected one obtained by dividing the "Hard value" by the max range of the integer, it seems.
@@ -177,18 +178,18 @@ class CIAOImage:
 
     def __getitem__(self, key) -> str | int | float | Quantity:
         # Return metadata by exact key
-        if key in self.metadata:
-            return self.metadata[key]
+        if key in self.image_header:
+            return self.image_header[key]
 
         # If key is not found, try without group numbers in metadata keys
-        merged_keys = {k.split(':', 1)[-1]: k for k in self.metadata.keys()}
+        merged_keys = {k.split(':', 1)[-1]: k for k in self.image_header.keys()}
         if key in merged_keys:
-            return self.metadata[merged_keys[key]]
+            return self.image_header[merged_keys[key]]
         else:
             raise KeyError(f'Key not found: {key}')
 
     def __repr__(self) -> str:
-        reprstr = (f'{self.metadata["Data type"]} image "{self.title}" [{self.data.units}], '
+        reprstr = (f'{self.image_header["Data type"]} image "{self.title}" [{self.data.units}], '
                    f'{self.data.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
 
