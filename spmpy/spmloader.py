@@ -72,12 +72,13 @@ class SPMFile:
         return interpret_file_header(bytestring)
 
     @staticmethod
-    def extract_ciao_images(metadata: dict, file_bytes: bytes) -> dict[str, CIAOImage]:
+    def extract_ciao_images(header: dict, bytestring: bytes) -> dict[str, CIAOImage]:
         """ Data for CIAO images are found using the metadata from the Ciao image sections in the metadata """
         images = {}
-        image_sections = {k: v for k, v in metadata.items() if k.startswith('Ciao image')}
-        for i, image_metadata in enumerate(image_sections.values()):
-            image = CIAOImage(image_metadata, metadata, file_bytes)
+        # image_sections = {k: v for k, v in header.items() if k.startswith('Ciao image')}
+        image_sections = header['Ciao image list']
+        for i, image_metadata in enumerate(image_sections):
+            image = CIAOImage(image_metadata, header, bytestring)
             key = image_metadata['2:Image Data'].internal_designation
             images[key] = image
 
@@ -86,6 +87,10 @@ class SPMFile:
 
 class CIAOImage:
     """ A CIAO image with metadata"""
+
+    # TODO: Make construction simpler, e.g. pass only bytestring and start/end bytes
+    # TODO: Revisit how aspect ratio is used so we don't elongate images
+    # TODO: Move logic for converting bytes to image into separate methods
 
     def __init__(self, image_metadata: dict, full_metadata: dict, file_bytes: bytes):
         self.width = None
@@ -239,46 +244,47 @@ class CIAOImage:
         return np.meshgrid(self.x, self.y)
 
 
-def interpret_file_header(header_bytetring: bytes, encoding: str = 'latin-1') \
+def interpret_file_header(header_bytestring: bytes, encoding: str = 'latin-1') \
         -> dict[str, dict[str, int, float, str, Quantity]]:
     """ Walk through all lines in metadata and interpret sections beginning with * """
-    header_lines = header_bytetring.splitlines()
+    header_lines = header_bytestring.splitlines()
 
-    metadata = {}
+    metadata = {'Ciao image list': []}
     current_section = None
+    current_metadata = {}
     n_image = 0
 
     # Walk through each line of metadata and extract sections and parameters
     for line_bytes in header_lines:
-        if line_bytes == b'\\*File list end':
-            # End of header, break out of loop
-            break
-
         line = line_bytes.decode(encoding).lstrip('\\')
         if line.startswith('*'):
             # Lines starting with * indicate a new section
-            current_section = line.strip('*')
-
-            # "Ciao image list" appears multiple times, so we give them a number
             if current_section == 'Ciao image list':
-                current_section = f'Ciao image list {n_image}'
+                # If the section is an image list, append metadata to relevant list
+                metadata[current_section].append(current_metadata)
                 n_image += 1
+            elif current_section is not None:
+                # If section is a "regular" section, add metadata entry with section as key
+                metadata[current_section] = current_metadata
 
-            # Initialize an empty dict to contain metadata for each section
-            metadata[current_section] = {}
+            if line_bytes == b'\\*File list end':
+                # End of header, break out of loop
+                break
+
+            # Get current secition and initialize an empty dict to contain metadata for each section
+            current_section = line.strip('*')
+            current_metadata = {}
 
         elif line.startswith('@'):
             # Line is CIAO parameter, interpret and add to current section
             ciaoparam = CIAOParameter.from_string(line)
 
-            # Note: The "parameter" used as key is not always unique and can appear multiple times with different
-            # group number. Usually not an issue for CIAO images, however.
+            # The key must include the group number as the same name can appear multiple times
             key = ciaoparam.name if not ciaoparam.group else f'{ciaoparam.group}:{ciaoparam.name}'
-            metadata[current_section][key] = ciaoparam
-
+            current_metadata[key] = ciaoparam
         else:
             # Line is regular parameter, add to metadata of current section
             key, value = line.split(':', 1)
-            metadata[current_section][key] = parse_parameter_value(value)
+            current_metadata[key] = parse_parameter_value(value)
 
     return metadata
