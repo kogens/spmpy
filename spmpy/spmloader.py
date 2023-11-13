@@ -101,15 +101,22 @@ class CIAOImage:
 
         # Some handy attributes are defined below for ease of use
         self.title = self.image_header['2:Image Data'].external_designation
-        self.scansize = self.image_header['Scan Size']
+        self.scan_size = self.file_header['Ciao scan list']['Scan Size']
 
-        self.width = None
-        self.height = None
+        # Calculate relevant physical quantities for dimension
+        n_rows, n_cols = self._raw_image.shape
+        aspect_ratio = [float(x) for x in self['Aspect Ratio'].strip().split(':')]
 
-        self.px_size_x, self.px_size_y = None, None
-        self.x, self.y = None, None
+        # Height and width
+        self.height = self.scan_size / aspect_ratio[0]
+        self.width = self.scan_size / aspect_ratio[1]
 
-        self.calculate_physical_units()
+        # Size of pixels in x and y
+        self.px_size_y = self.height / n_rows
+        self.px_size_x = self.width / n_cols
+
+        self.y = np.linspace(0, self.height, n_rows)
+        self.x = np.linspace(0, self.width, n_cols)
 
     @property
     def _bytes_per_pixel(self):
@@ -182,33 +189,6 @@ class CIAOImage:
         flat_header.update(self.image_header)
 
         return flat_header
-
-    def calculate_physical_units(self):
-        """
-        Calculate physical scale of image values.
-
-        From manual:
-            To obtain the X axis pixel width, use the following relation:
-                X = Scan size / ((Samples/line) - 1)
-                Y = Scan size / ((Number of Lines) - 1)
-
-        """
-        # Calculate pixel sizes in physical units
-        # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
-        n_rows, n_cols = self._raw_image.shape
-
-        aspect_ratio = [float(x) for x in self['Aspect Ratio'].strip().split(':')]
-
-        scan_size = self.file_header['Ciao scan list']['Scan Size']
-        self.height = scan_size / aspect_ratio[0]
-        self.width = scan_size / aspect_ratio[1]
-
-        # Calculate pixel sizes and
-        self.px_size_y = self.height / n_rows
-        self.px_size_x = self.width / n_cols
-
-        self.y = np.linspace(0, self.height, n_rows)
-        self.x = np.linspace(0, self.width, n_cols)
 
     def __array__(self) -> np.ndarray:
         # warnings.filterwarnings("ignore", category=UnitStrippedWarning)
