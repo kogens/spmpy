@@ -7,7 +7,8 @@ from pint import UnitRegistry, Quantity, UndefinedUnitError
 
 # Define regex to identify numerical values
 RE_NUMERICAL = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
-RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:[eE][+-]\d+)? ?)+)([^\d:]+)?$')
+RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:[eE][+-]\d+)? )+)([^\d:]+)?$')
+RE_DATE = re.compile(r'^\d{2}:\d{2}:\d{2} (AM|PM) \D{3} \D{3} \d{1,2} \d{4}$')
 
 INTEGER_SIZE = 2 ** 16  # 16-bit ADC according to manual
 
@@ -82,12 +83,9 @@ def parse_parameter_value(value_str: str) -> str | int | float | Quantity | date
 
         return values
 
-    # Try if value is a date
-    try:
-        value = datetime.strptime(value_str, '%I:%M:%S %p %a %b %d %Y')
-        return value
-    except ValueError:
-        pass
+    match_date = RE_DATE.match(value_str)
+    if match_date:
+        return datetime.strptime(value_str, '%I:%M:%S %p %a %b %d %Y')
 
     # No other matches, strip " and return value
     return value_str.strip('"')
