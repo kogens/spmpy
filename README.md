@@ -3,10 +3,7 @@ A simple python package for working with Scanning Probe Microscopy (SPM) files, 
 
 ## Setup
 Requires Python >= 3.9 with `numpy` and [`pint`](https://pint.readthedocs.io/) for units, 
-optionally `matplotlib` for plotting examples below
-```
-pip install numpy pint matplotlib
-```
+optionally `matplotlib` for plotting examples below.
 
 Install the module from the GitHub url
 ```
