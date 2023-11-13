@@ -76,7 +76,7 @@ class SPMFile:
         image_sections = header['Ciao image list']
         for i, image_header in enumerate(image_sections):
             image = CIAOImage(bytestring, header, image_number=i)
-            key = image_header['2:Image Data'].internal_designation
+            key = image_header['2:Image Data'].external_designation
             images[key] = image
 
         return images
@@ -123,7 +123,7 @@ class CIAOImage:
         data_length = self.image_header['Data length']
         n_rows, n_cols = self.image_header['Number of lines'], self.image_header['Samps/line']
 
-        return data_length / (n_rows * n_cols)
+        return data_length // (n_rows * n_cols)
 
     def raw_image_from_bytes(self, file_bytes):
         """
@@ -167,8 +167,11 @@ class CIAOImage:
         """
         # z_scale_key = self['Z magnify'].soft_scale  # Possibly more general way to get "2:Z Scale" key
         z_scale = self['2:Z scale']
-        sens_z_scan = self[z_scale.soft_scale]
-        z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / 2 ** (8 * self._bytes_per_pixel)
+        if z_scale.soft_scale:
+            sens_z_scan = self[z_scale.soft_scale]
+            z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / 2 ** (8 * self._bytes_per_pixel)
+        else:
+            z_height = self._raw_image * z_scale.hard_value / 2 ** (8 * self._bytes_per_pixel)
 
         return z_height
 
@@ -193,14 +196,16 @@ class CIAOImage:
         # Calculate pixel sizes in physical units
         # NOTE: This assumes "Scan Size" always represents the longest dimension of the image.
         n_rows, n_cols = self._raw_image.shape
-        aspect_ratio = (max(self._raw_image.shape) / n_rows, max(self._raw_image.shape) / n_cols)
+
+        aspect_ratio = [float(x) for x in self['Aspect Ratio'].strip().split(':')]
+
+        scan_size = self.file_header['Ciao scan list']['Scan Size']
+        self.height = scan_size / aspect_ratio[0]
+        self.width = scan_size / aspect_ratio[1]
 
         # Calculate pixel sizes and
-        self.px_size_y = self.scansize[0] / (n_rows - 1) / aspect_ratio[0]
-        self.px_size_x = self.scansize[1] / (n_cols - 1) / aspect_ratio[1]
-
-        self.height = (n_rows - 1) * self.px_size_y
-        self.width = (n_cols - 1) * self.px_size_x
+        self.px_size_y = self.height / n_rows
+        self.px_size_x = self.width / n_cols
 
         self.y = np.linspace(0, self.height, n_rows)
         self.x = np.linspace(0, self.width, n_cols)
