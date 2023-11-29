@@ -27,16 +27,16 @@ class CIAOParameter(ABC):
     """
 
     @abstractmethod
-    def __init__(self, name: str, group: int = None):
+    def __init__(self, name: str, value: int | float | str | Quantity, group: int = None):
         self.name = name
+        self.value = value
         self.group = group
 
     def __str__(self):
-        return f'{self.name}: ' + (f'"{self.value}"' if isinstance(self.value, str) else f'{self.value}')
+        return str(self.value)
 
-    @property
-    def value(self):
-        return None
+    def __repr__(self):
+        return f'{self.name}: {self.value}'
 
     @property
     def ptype(self):
@@ -78,6 +78,86 @@ class CIAOParameter(ABC):
         """ Fetch attributes from the primary value as well, e.g. units."""
         return getattr(self.value, name)
 
+    def __add__(self, other):
+        """ Define addition behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic addition logic for CIAOParameter
+            return self.value + other.value
+        else:
+            return self.value + other
+
+    def __radd__(self, other):
+        """ Define addition behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic addition logic for CIAOParameter
+            return other.value + self.value
+        else:
+            return other + self.value
+
+    def __sub__(self, other):
+        """ Define subtraction behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic subtraction logic for CIAOParameter
+            return self.value - other.value
+        else:
+            return self.value - other
+
+    def __rsub__(self, other):
+        """ Define subtraction behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic subtraction logic for CIAOParameter
+            return other.value - self.value
+        else:
+            return other - self.value
+
+    def __mul__(self, other):
+        """ Define multiplication behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic multiplication logic for CIAOParameter
+            return self.value * other.value
+        else:
+            return self.value * other
+
+    def __rmul__(self, other):
+        """ Define multiplication behavior for CIAOParameter. """
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        """ Define division behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic division logic for CIAOParameter
+            return self.value / other.value
+        else:
+            return self.value / other
+
+    def __rtruediv__(self, other):
+        """ Define division behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic division logic for CIAOParameter
+            return other.value / self.value
+        else:
+            return other / self.value
+
+    def __pow__(self, other):
+        """ Define power behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic power logic for CIAOParameter
+            return self.value ** other.value
+        else:
+            return self.value ** other
+
+    def __rpow__(self, other):
+        """ Define power behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic power logic for CIAOParameter
+            return other.value ** self.value
+        else:
+            return other ** self.value
+
+    def __abs__(self):
+        """ Define absolute value behavior for CIAOParameter. """
+        return abs(self.value)
+
 
 class ValueParameter(CIAOParameter):
     """
@@ -107,7 +187,7 @@ class ValueParameter(CIAOParameter):
                  hard_scale: float | Quantity = None,
                  soft_scale: str = None,
                  soft_scale_value: float | Quantity = None):
-        super().__init__(name=name, group=group)
+        super().__init__(name=name, value=hard_value, group=group)
         self.hard_value = hard_value
         self.hard_scale = hard_scale
         self.soft_scale = soft_scale
@@ -127,10 +207,6 @@ class ValueParameter(CIAOParameter):
         return 'V'
 
     @property
-    def value(self):
-        return self.hard_value
-
-    @property
     def ciao_string(self):
         group_string = f'{self.group}:' if self.group else ''
         hscale_string = f' ({self.hard_scale})' if self.hard_scale else ''
@@ -146,13 +222,9 @@ class SelectParameter(CIAOParameter):
     """
 
     def __init__(self, name: str, internal_designation: str, external_designation: str, group: int = None):
-        super().__init__(name=name, group=group)
+        super().__init__(name=name, value=external_designation, group=group)
         self.internal_designation = internal_designation
         self.external_designation = external_designation
-
-    @property
-    def value(self):
-        return self.external_designation
 
     @property
     def ptype(self):
@@ -176,13 +248,9 @@ class ScaleParameter(CIAOParameter):
     """
 
     def __init__(self, name: str, hard_value: float | Quantity, group: int = None, soft_scale: str = None):
-        super().__init__(name=name, group=group)
+        super().__init__(name=name, value=hard_value, group=group)
         self.hard_value = hard_value
         self.soft_scale = soft_scale
-
-    @property
-    def value(self):
-        return self.hard_value
 
     @property
     def ptype(self):
