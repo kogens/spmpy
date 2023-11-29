@@ -59,18 +59,18 @@ class CIAOParameter(ABC):
                                       soft_scale=soft_scale,
                                       hard_scale=hard_scale,
                                       hard_value=value)
-            elif parameter_type == 'S':
-                return SelectParameter(group=group,
-                                       name=name,
-                                       internal_designation=soft_scale,
-                                       external_designation=value)
             elif parameter_type == 'C':
                 return ScaleParameter(group=group,
                                       name=name,
                                       soft_scale=soft_scale,
                                       hard_value=value)
+            elif parameter_type == 'S':
+                return SelectParameter(group=group,
+                                       name=name,
+                                       internal_designation=soft_scale,
+                                       external_designation=value)
             else:
-                raise ValueError(f'Not a recognized CIAO parameter type: {parameter_type}. Allowed types: V, S, C')
+                raise ValueError(f'Not a recognized CIAO parameter type: {parameter_type}. Allowed types: V, C, S')
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
@@ -195,13 +195,6 @@ class ValueParameter(CIAOParameter):
         if soft_scale_value:
             self.soft_scale_value = soft_scale_value
 
-    hard_value: float | str | Quantity
-
-    group: int = None
-    hard_scale: float | Quantity = None
-    soft_scale: str = None  # Usually refers to another parameter in the file
-    soft_scale_value: float | Quantity = None  # Actual value of the soft scale
-
     @property
     def ptype(self):
         return 'V'
@@ -213,27 +206,6 @@ class ValueParameter(CIAOParameter):
         sscale_string = f' [{self.soft_scale}]' if self.soft_scale else ''
 
         return f'\\@{group_string}{self.name}: {self.ptype}{sscale_string}{hscale_string} {self.hard_value}'
-
-
-class SelectParameter(CIAOParameter):
-    """
-    The Select parameters (identified by the letter “S”) have the following format:
-        [Internal-designation for selection] “external-designation for selection”
-    """
-
-    def __init__(self, name: str, internal_designation: str, external_designation: str, group: int = None):
-        super().__init__(name=name, value=external_designation, group=group)
-        self.internal_designation = internal_designation
-        self.external_designation = external_designation
-
-    @property
-    def ptype(self):
-        return 'S'
-
-    @property
-    def ciao_string(self):
-        group_string = f'{self.group}:' if self.group else ''
-        return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'
 
 
 class ScaleParameter(CIAOParameter):
@@ -260,3 +232,24 @@ class ScaleParameter(CIAOParameter):
     def ciao_string(self):
         group_string = f'{self.group}:' if self.group else ''
         return f'\\@{group_string} {self.name}: {self.ptype} [{self.soft_scale}] {self.hard_value}'
+
+
+class SelectParameter(CIAOParameter):
+    """
+    The Select parameters (identified by the letter “S”) have the following format:
+        [Internal-designation for selection] “external-designation for selection”
+    """
+
+    def __init__(self, name: str, internal_designation: str, external_designation: str, group: int = None):
+        super().__init__(name=name, value=external_designation, group=group)
+        self.internal_designation = internal_designation
+        self.external_designation = external_designation
+
+    @property
+    def ptype(self):
+        return 'S'
+
+    @property
+    def ciao_string(self):
+        group_string = f'{self.group}:' if self.group else ''
+        return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'
