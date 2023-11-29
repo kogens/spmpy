@@ -11,7 +11,7 @@ from pint import Quantity
 from .ciaoparams import CIAOParameter
 from .utils import parse_parameter_value
 
-SUPPORTED_VERSIONS = ['0x09400202', '0x09400103']
+SUPPORTED_VERSIONS = ['0x09200201', '0x09400202', '0x09400103']
 
 
 class SPMFile:
