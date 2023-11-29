@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import warnings
 from os import PathLike
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from pint import Quantity
 
 from .ciaoparams import CIAOParameter
 from .utils import parse_parameter_value
+
+SUPPORTED_VERSIONS = ['0x09200201', '0x09400202', '0x09400103']
 
 
 class SPMFile:
@@ -24,6 +27,10 @@ class SPMFile:
             raise ValueError('SPM file must be path to spm file or raw bytestring')
 
         self.header: dict = self.parse_header(bytestring)
+        file_version = self.header['File list']['Version']
+        if file_version not in SUPPORTED_VERSIONS:
+            warnings.warn(f'Untested SPM file verison, calculations may be inaccurate: {file_version}. '
+                          f'Supported versions; {SUPPORTED_VERSIONS}')
         self.images: dict = self.extract_ciao_images(self.header, bytestring)
 
     def __repr__(self) -> str:

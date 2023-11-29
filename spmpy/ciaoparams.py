@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 from pint import Quantity
 
 from .utils import parse_parameter_value
 
 RE_CIAO_PARAM = re.compile(
-    r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$')
+    r'^\\?@?(?:(?P<group>\d?):)?(?P<param>.*): (?P<type>\w)\s?(?:\[(?P<softscale>.*)\])?\s?(?:\((?P<hardscale>.*)\))?\s(?P<hardval>.*)$'
+)
 
 
-@dataclass
-class CIAOParameter:
+class CIAOParameter(ABC):
     r"""
     In the file header some parameters start with '\@' instead of simply '\'. This is an indication to the software
     that the data that follows is intended for a CIAO parameter object. After the '@', you might see a number
@@ -26,17 +26,20 @@ class CIAOParameter:
     - S means Select – a parameter that describes some selection that has been made.
     """
 
-    name: str  # Parameter name
+    @abstractmethod
+    def __init__(self, name: str, value: int | float | str | Quantity, group: int = None):
+        self.name = name
+        self.value = value
+        self.group = group
 
     def __str__(self):
-        return f'{self.name}: ' + (f'"{self.value}"' if isinstance(self.value, str) else f'{self.value}')
+        return str(self.value)
+
+    def __repr__(self):
+        return f'{self.name}: {self.value}'
 
     @property
-    def value(self):
-        return None
-
-    @property
-    def group(self):
+    def ptype(self):
         return None
 
     @classmethod
@@ -56,18 +59,18 @@ class CIAOParameter:
                                       soft_scale=soft_scale,
                                       hard_scale=hard_scale,
                                       hard_value=value)
-            elif parameter_type == 'S':
-                return SelectParameter(group=group,
-                                       name=name,
-                                       internal_designation=soft_scale,
-                                       external_designation=value)
             elif parameter_type == 'C':
                 return ScaleParameter(group=group,
                                       name=name,
                                       soft_scale=soft_scale,
                                       hard_value=value)
+            elif parameter_type == 'S':
+                return SelectParameter(group=group,
+                                       name=name,
+                                       internal_designation=soft_scale,
+                                       external_designation=value)
             else:
-                raise ValueError(f'Not a recognized CIAO parameter type: {parameter_type}. Allowed types: V, S, C')
+                raise ValueError(f'Not a recognized CIAO parameter type: {parameter_type}. Allowed types: V, C, S')
         else:
             raise ValueError(f'Not a recognized CIAO parameter object: {ciao_string}')
 
@@ -75,8 +78,87 @@ class CIAOParameter:
         """ Fetch attributes from the primary value as well, e.g. units."""
         return getattr(self.value, name)
 
+    def __add__(self, other):
+        """ Define addition behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic addition logic for CIAOParameter
+            return self.value + other.value
+        else:
+            return self.value + other
 
-@dataclass
+    def __radd__(self, other):
+        """ Define addition behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic addition logic for CIAOParameter
+            return other.value + self.value
+        else:
+            return other + self.value
+
+    def __sub__(self, other):
+        """ Define subtraction behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic subtraction logic for CIAOParameter
+            return self.value - other.value
+        else:
+            return self.value - other
+
+    def __rsub__(self, other):
+        """ Define subtraction behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic subtraction logic for CIAOParameter
+            return other.value - self.value
+        else:
+            return other - self.value
+
+    def __mul__(self, other):
+        """ Define multiplication behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic multiplication logic for CIAOParameter
+            return self.value * other.value
+        else:
+            return self.value * other
+
+    def __rmul__(self, other):
+        """ Define multiplication behavior for CIAOParameter. """
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        """ Define division behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic division logic for CIAOParameter
+            return self.value / other.value
+        else:
+            return self.value / other
+
+    def __rtruediv__(self, other):
+        """ Define division behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic division logic for CIAOParameter
+            return other.value / self.value
+        else:
+            return other / self.value
+
+    def __pow__(self, other):
+        """ Define power behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic power logic for CIAOParameter
+            return self.value ** other.value
+        else:
+            return self.value ** other
+
+    def __rpow__(self, other):
+        """ Define power behavior for CIAOParameter. """
+        if isinstance(other, CIAOParameter):
+            # Implement generic power logic for CIAOParameter
+            return other.value ** self.value
+        else:
+            return other ** self.value
+
+    def __abs__(self):
+        """ Define absolute value behavior for CIAOParameter. """
+        return abs(self.value)
+
+
 class ValueParameter(CIAOParameter):
     """
     The Value (identified by the letter “V”) parameters have the following format:
@@ -98,20 +180,24 @@ class ValueParameter(CIAOParameter):
     parameter list for tag and use that parameter's hard-value for the soft-scale.
     """
 
-    hard_value: float | str | Quantity
+    def __init__(self,
+                 name: str,
+                 hard_value: float | str | Quantity,
+                 group: int = None,
+                 hard_scale: float | Quantity = None,
+                 soft_scale: str = None,
+                 soft_scale_value: float | Quantity = None):
+        super().__init__(name=name, value=hard_value, group=group)
+        self.hard_value = hard_value
+        self.hard_scale = hard_scale
+        self.soft_scale = soft_scale
 
-    group: int = None
-    hard_scale: float | Quantity = None
-    soft_scale: str = None  # Usually refers to another parameter in the file
-    soft_scale_value: float | Quantity = None  # Actual value of the soft scale
+        if soft_scale_value:
+            self.soft_scale_value = soft_scale_value
 
     @property
     def ptype(self):
         return 'V'
-
-    @property
-    def value(self):
-        return self.hard_value
 
     @property
     def ciao_string(self):
@@ -122,32 +208,6 @@ class ValueParameter(CIAOParameter):
         return f'\\@{group_string}{self.name}: {self.ptype}{sscale_string}{hscale_string} {self.hard_value}'
 
 
-@dataclass
-class SelectParameter(CIAOParameter):
-    """
-    The Select parameters (identified by the letter “S”) have the following format:
-        [Internal-designation for selection] “external-designation for selection”
-    """
-    internal_designation: str
-    external_designation: str
-
-    group: int = None
-
-    @property
-    def ptype(self):
-        return 'S'
-
-    @property
-    def value(self):
-        return self.external_designation
-
-    @property
-    def ciao_string(self):
-        group_string = f'{self.group}:' if self.group else ''
-        return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'
-
-
-@dataclass
 class ScaleParameter(CIAOParameter):
     """
     The Scale parameters (identified by the letter “C”) have the following format:
@@ -158,20 +218,38 @@ class ScaleParameter(CIAOParameter):
     Most often used for the Z magnify parm to allow user to change scaling of Z scale in Off-
     line without actually affecting the real data in the file.
     """
-    soft_scale: str
-    hard_value: str
 
-    group: int = None
+    def __init__(self, name: str, hard_value: float | Quantity, group: int = None, soft_scale: str = None):
+        super().__init__(name=name, value=hard_value, group=group)
+        self.hard_value = hard_value
+        self.soft_scale = soft_scale
 
     @property
     def ptype(self):
         return 'C'
 
     @property
-    def value(self):
-        return self.hard_value
+    def ciao_string(self):
+        group_string = f'{self.group}:' if self.group else ''
+        return f'\\@{group_string} {self.name}: {self.ptype} [{self.soft_scale}] {self.hard_value}'
+
+
+class SelectParameter(CIAOParameter):
+    """
+    The Select parameters (identified by the letter “S”) have the following format:
+        [Internal-designation for selection] “external-designation for selection”
+    """
+
+    def __init__(self, name: str, internal_designation: str, external_designation: str, group: int = None):
+        super().__init__(name=name, value=external_designation, group=group)
+        self.internal_designation = internal_designation
+        self.external_designation = external_designation
+
+    @property
+    def ptype(self):
+        return 'S'
 
     @property
     def ciao_string(self):
         group_string = f'{self.group}:' if self.group else ''
-        return f'\\@{group_string} {self.name}: {self.ptype} [{self.soft_scale}] {self.hard_value}'
+        return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'
