@@ -198,17 +198,20 @@ class CIAOImage:
         return flat_header
 
     def __array__(self) -> np.ndarray:
+        """ Return image as numpy array """
         # warnings.filterwarnings("ignore", category=UnitStrippedWarning)
         return self.image.__array__()
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        """ Allow numpy ufuncs to be applied to image """
         return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
     def __getitem__(self, key) -> str | int | float | Quantity:
-        """ Access parameters directly by key from flattened header """
+        """ Fetches values from the header when class is called like a dict """
         return self._flat_header[key]
 
     def __repr__(self) -> str:
+        """ Representation of CIAO image """
         reprstr = (f'{self.image_header["Data type"]} image "{self.title}" [{self.image.units}], '
                    f'{self.image.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
@@ -217,6 +220,7 @@ class CIAOImage:
         return self.__repr__()
 
     def __getattr__(self, name):
+        """ Get attributes from the image, i.e. directly from the Quantity or numpy array containing the image data"""
         return getattr(self.image, name)
 
     def __add__(self, other):
@@ -257,11 +261,13 @@ class CIAOImage:
 
     @property
     def extent(self) -> list[float]:
+        """ Extent of image in physical units """
         ext = [0, self.width.magnitude, 0, self.height.magnitude]
         return ext
 
     @property
     def meshgrid(self) -> np.meshgrid:
+        """ Meshgrid of x and y coordinates """
         return np.meshgrid(self.x, self.y)
 
     def plot(self, ax=None, add_cbar=True, **kwargs):

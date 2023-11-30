@@ -44,6 +44,7 @@ class CIAOParameter(ABC):
 
     @classmethod
     def from_string(cls, ciao_string):
+        """ Parse a CIAO parameter from a string. """
         match = RE_CIAO_PARAM.match(ciao_string)
         if match:
             group = int(match.group('group')) if match.group('group') else None
@@ -201,6 +202,7 @@ class ValueParameter(CIAOParameter):
 
     @property
     def ciao_string(self):
+        """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         hscale_string = f' ({self.hard_scale})' if self.hard_scale else ''
         sscale_string = f' [{self.soft_scale}]' if self.soft_scale else ''
@@ -230,6 +232,7 @@ class ScaleParameter(CIAOParameter):
 
     @property
     def ciao_string(self):
+        """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         return f'\\@{group_string} {self.name}: {self.ptype} [{self.soft_scale}] {self.hard_value}'
 
@@ -251,5 +254,6 @@ class SelectParameter(CIAOParameter):
 
     @property
     def ciao_string(self):
+        """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'
