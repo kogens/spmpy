@@ -264,6 +264,27 @@ class CIAOImage:
     def meshgrid(self) -> np.meshgrid:
         return np.meshgrid(self.x, self.y)
 
+    def plot(self, ax=None, add_cbar=True, **kwargs):
+        """ Plot image with matplotlib """
+        if ax is None:
+            # Get current axis if none is specified
+            # If matplotlib.pyplot is not imported, import it and create a new axis
+            import matplotlib.pyplot as plt
+            ax = plt.gca()
+
+        # Plot image and set axis labels
+        im = ax.imshow(self.image.m, extent=self.extent, **kwargs)
+        ax.set_xlabel(self.width.units)
+        ax.set_ylabel(self.height.units)
+        ax.set_title(self.title)
+
+        if add_cbar:
+            # Add colorbar to axis with units
+            cbar = ax.figure.colorbar(im, ax=ax, fraction=0.05, pad=0.1)
+            cbar.ax.set_ylabel(self.image.units)
+
+        return ax
+
 
 def parse_header(header_bytestring: bytes, encoding: str) \
         -> dict[str, dict[str, int, float, str, Quantity]]:
