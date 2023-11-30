@@ -17,7 +17,7 @@ SUPPORTED_VERSIONS = ['0x09200201', '0x09400202', '0x09400103']
 class SPMFile:
     """ Representation of an entire SPM file with images and metadata """
 
-    def __init__(self, spmfile: str | PathLike | bytes):
+    def __init__(self, spmfile: str | PathLike | bytes, encoding='latin-1'):
         if isinstance(spmfile, (str, Path)):
             self.path = Path(spmfile)
             bytestring = self.load_from_file(spmfile)
@@ -26,7 +26,7 @@ class SPMFile:
         else:
             raise ValueError('SPM file must be path to spm file or raw bytestring')
 
-        self.header: dict = self.parse_header(bytestring)
+        self.header: dict = self.parse_header(bytestring, encoding=encoding)
         file_version = self.header['File list']['Version']
         if file_version not in SUPPORTED_VERSIONS:
             warnings.warn(f'Untested SPM file verison, calculations may be inaccurate: {file_version}. '
@@ -72,9 +72,9 @@ class SPMFile:
         return bytestring
 
     @staticmethod
-    def parse_header(bytestring) -> dict:
+    def parse_header(bytestring, encoding) -> dict:
         """ Extract data in header from bytes """
-        return interpret_file_header(bytestring)
+        return parse_header(bytestring, encoding=encoding)
 
     @staticmethod
     def extract_ciao_images(header: dict, bytestring: bytes) -> dict[str, CIAOImage]:
@@ -264,8 +264,29 @@ class CIAOImage:
     def meshgrid(self) -> np.meshgrid:
         return np.meshgrid(self.x, self.y)
 
+    def plot(self, ax=None, add_cbar=True, **kwargs):
+        """ Plot image with matplotlib """
+        if ax is None:
+            # Get current axis if none is specified
+            # If matplotlib.pyplot is not imported, import it and create a new axis
+            import matplotlib.pyplot as plt
+            ax = plt.gca()
 
-def interpret_file_header(header_bytestring: bytes, encoding: str = 'latin-1') \
+        # Plot image and set axis labels
+        im = ax.imshow(self.image.m, extent=self.extent, **kwargs)
+        ax.set_xlabel(self.width.units)
+        ax.set_ylabel(self.height.units)
+        ax.set_title(self.title)
+
+        if add_cbar:
+            # Add colorbar to axis with units
+            cbar = ax.figure.colorbar(im, ax=ax, fraction=0.05, pad=0.1)
+            cbar.ax.set_ylabel(self.image.units)
+
+        return ax
+
+
+def parse_header(header_bytestring: bytes, encoding: str) \
         -> dict[str, dict[str, int, float, str, Quantity]]:
     """ Walk through all lines in header and interpret sections beginning with * """
     header_lines = header_bytestring.splitlines()
