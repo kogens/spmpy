@@ -27,15 +27,15 @@ class CIAOParameter(ABC):
     """
 
     @abstractmethod
-    def __init__(self, name: str, value: int | float | str | Quantity, group: int = None):
-        self.name = name
-        self.value = value
-        self.group = group
+    def __init__(self, name: str, value: int | float | str | Quantity, group: int | None = None):
+        self.name: str = name
+        self.value: int | float | str | Quantity = value
+        self.group: int | None = group
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.name}: {self.value}'
 
     @property
@@ -43,7 +43,7 @@ class CIAOParameter(ABC):
         return None
 
     @classmethod
-    def from_string(cls, ciao_string):
+    def from_string(cls, ciao_string) -> CIAOParameter:
         """ Parse a CIAO parameter from a string. """
         match = RE_CIAO_PARAM.match(ciao_string)
         if match:
@@ -184,10 +184,10 @@ class ValueParameter(CIAOParameter):
     def __init__(self,
                  name: str,
                  hard_value: float | str | Quantity,
-                 group: int = None,
-                 hard_scale: float | Quantity = None,
-                 soft_scale: str = None,
-                 soft_scale_value: float | Quantity = None):
+                 group: int | None = None,
+                 hard_scale: float | Quantity | None = None,
+                 soft_scale: str | None = None,
+                 soft_scale_value: float | Quantity | None = None):
         super().__init__(name=name, value=hard_value, group=group)
         self.hard_value = hard_value
         self.hard_scale = hard_scale
@@ -197,11 +197,11 @@ class ValueParameter(CIAOParameter):
             self.soft_scale_value = soft_scale_value
 
     @property
-    def ptype(self):
+    def ptype(self) -> str:
         return 'V'
 
     @property
-    def ciao_string(self):
+    def ciao_string(self) -> str:
         """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         hscale_string = f' ({self.hard_scale})' if self.hard_scale else ''
@@ -227,11 +227,11 @@ class ScaleParameter(CIAOParameter):
         self.soft_scale = soft_scale
 
     @property
-    def ptype(self):
+    def ptype(self) -> str:
         return 'C'
 
     @property
-    def ciao_string(self):
+    def ciao_string(self) -> str:
         """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         return f'\\@{group_string} {self.name}: {self.ptype} [{self.soft_scale}] {self.hard_value}'
@@ -249,11 +249,11 @@ class SelectParameter(CIAOParameter):
         self.external_designation = external_designation
 
     @property
-    def ptype(self):
+    def ptype(self) -> str:
         return 'S'
 
     @property
-    def ciao_string(self):
+    def ciao_string(self) -> str:
         """ CIAO string representation of the parameter. """
         group_string = f'{self.group}:' if self.group else ''
         return f'\\@{group_string}{self.name}: {self.ptype} [{self.internal_designation}] "{self.external_designation}"'

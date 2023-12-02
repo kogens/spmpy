@@ -38,7 +38,7 @@ LSB is the "voltage reoslution" of the ADC/DAC and represents the smallest
 """
 
 
-def parse_parameter_value(value_str: str) -> str | int | float | Quantity | datetime | list[float, Quantity] | None:
+def parse_parameter_value(value_str: str) -> str | int | float | Quantity | datetime | None:
     """ Parse parameters into number, string or physical quantity """
 
     # Value is None, return it

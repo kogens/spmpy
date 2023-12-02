@@ -38,19 +38,19 @@ class SPMFile:
         path = f'{self.path.name}, ' if hasattr(self, 'path') else ''
         return f'SPM file: {path}{self["Date"]}. Images: {titles}'
 
-    def __getitem__(self, item) -> tuple[int, float, str, Quantity]:
+    def __getitem__(self, item) -> int | float | str | Quantity | CIAOParameter:
         """ Fetches values from the header when class is called like a dict """
         return self._flat_header[item]
 
     @property
-    def _flat_header(self):
+    def _flat_header(self) -> dict[str, int | float | str | Quantity | CIAOParameter]:
         """ Construct a "flat header" for accessing with __getitem__.
         Avoid "Ciao image list" as it appears multiple times with non-unique keys """
         non_repeating_keys = [key for key in self.header.keys() if 'Ciao image list' not in key]
         return {k: v for key in non_repeating_keys for k, v in self.header[key].items()}
 
     @property
-    def groups(self) -> dict[int | None, dict[str]]:
+    def groups(self) -> dict[int | None, dict[str, CIAOParameter]]:
         """ CIAO parameters ordered by group number """
         groups = {}
         for key, value in sorted(self._flat_header.items()):
@@ -64,7 +64,7 @@ class SPMFile:
         return groups
 
     @staticmethod
-    def load_from_file(path):
+    def load_from_file(path) -> bytes:
         """ Load SPM data from a file on disk """
         with open(path, 'rb') as f:
             bytestring = f.read()
@@ -72,7 +72,7 @@ class SPMFile:
         return bytestring
 
     @staticmethod
-    def parse_header(bytestring, encoding) -> dict:
+    def parse_header(bytestring, encoding) -> dict[str, dict[str, int | float | str | Quantity | CIAOParameter]]:
         """ Extract data in header from bytes """
         return parse_header(bytestring, encoding=encoding)
 
@@ -126,7 +126,7 @@ class CIAOImage:
         self.x = np.linspace(0, self.width, n_cols)
 
     @property
-    def _bytes_per_pixel(self):
+    def _bytes_per_pixel(self) -> int:
         """
         Calculate bytes/pixel based on data length and number of rows and columns.
         Note: This is often different from the "Bytes/pixel" parameter in the header, but this seems to be the
@@ -139,7 +139,7 @@ class CIAOImage:
 
         return data_length // (n_rows * n_cols)
 
-    def raw_image_from_bytes(self, file_bytes):
+    def raw_image_from_bytes(self, file_bytes) -> np.ndarray:
         """
         Decode image bytes into raw pixel values (unscaled, no units).
 
@@ -168,7 +168,7 @@ class CIAOImage:
         return raw_image
 
     @property
-    def image(self):
+    def image(self) -> Quantity[np.ndarray]:
         """
         Image data with physical units.
 
@@ -190,7 +190,7 @@ class CIAOImage:
         return z_height
 
     @property
-    def _flat_header(self):
+    def _flat_header(self) -> dict[str, int | float | str | Quantity | CIAOParameter]:
         """ Construct a "flat header" for accessing with __getitem__. """
         flat_header = {k: v for key in self.file_header.keys() for k, v in self.file_header[key].items()}
         flat_header.update(self.image_header)
@@ -202,7 +202,7 @@ class CIAOImage:
         # warnings.filterwarnings("ignore", category=UnitStrippedWarning)
         return self.image.__array__()
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> np.ndarray:
         """ Allow numpy ufuncs to be applied to image """
         return getattr(self.image, '__array_ufunc__')(ufunc, method, *inputs, **kwargs)
 
@@ -216,47 +216,47 @@ class CIAOImage:
                    f'{self.image.shape} px = ({self.height.m:.1f}, {self.width.m:.1f}) {self.px_size_x.u}')
         return reprstr
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
     def __getattr__(self, name):
-        """ Get attributes from the image, i.e. directly from the Quantity or numpy array containing the image data"""
+        """ Allow access to image attributes """
         return getattr(self.image, name)
 
-    def __add__(self, other):
+    def __add__(self, other) -> Quantity[np.ndarray]:
         if isinstance(other, CIAOImage):
             return self.image + other.image
         else:
             return self.image + other
 
-    def __radd__(self, other):
+    def __radd__(self, other) -> Quantity[np.ndarray]:
         return self.__add__(other)
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> Quantity[np.ndarray]:
         if isinstance(other, CIAOImage):
             return self.image - other.image
         else:
             return self.image - other
 
-    def __rsub__(self, other):
+    def __rsub__(self, other) -> Quantity[np.ndarray]:
         return self.__sub__(other)
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> Quantity[np.ndarray]:
         if isinstance(other, CIAOImage):
             return self.image * other.image
         else:
             return self.image * other
 
-    def __rmul__(self, other):
+    def __rmul__(self, other) -> Quantity[np.ndarray]:
         return self.__mul__(other)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> Quantity[np.ndarray]:
         if isinstance(other, CIAOImage):
             return self.image / other.image
         else:
             return self.image / other
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other) -> Quantity[np.ndarray]:
         return self.__truediv__(other)
 
     @property
@@ -293,7 +293,7 @@ class CIAOImage:
 
 
 def parse_header(header_bytestring: bytes, encoding: str) \
-        -> dict[str, dict[str, int, float, str, Quantity]]:
+        -> dict[str, dict[str, int | float | str | Quantity | CIAOParameter]]:
     """ Walk through all lines in header and interpret sections beginning with * """
     header_lines = header_bytestring.splitlines()
 
