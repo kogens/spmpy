@@ -112,11 +112,11 @@ class CIAOImage:
 
         # Calculate relevant physical quantities for dimension
         n_rows, n_cols = self._raw_image.shape
-        aspect_ratio = [float(x) for x in self['Aspect Ratio'].strip().split(':')]
+        self.aspect_ratio = [float(x) for x in self['Aspect Ratio'].strip().split(':')]
 
         # Height and width
-        self.height = self.scan_size / aspect_ratio[0]
-        self.width = self.scan_size / aspect_ratio[1]
+        self.height = self.scan_size / self.aspect_ratio[0]
+        self.width = self.scan_size / self.aspect_ratio[1]
 
         # Size of pixels in x and y
         self.px_size_y = self.height / n_rows
