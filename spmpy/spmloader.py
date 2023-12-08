@@ -183,9 +183,11 @@ class CIAOImage:
         z_scale = self['2:Z scale']
         if z_scale.soft_scale:
             sens_z_scan = self[z_scale.soft_scale]
-            z_height = self._raw_image * z_scale.hard_value * sens_z_scan.hard_value / 2 ** (8 * self._bytes_per_pixel)
+            scaling_factor = (z_scale.hard_value * sens_z_scan.hard_value).to_reduced_units()
         else:
-            z_height = self._raw_image * z_scale.hard_value / 2 ** (8 * self._bytes_per_pixel)
+            scaling_factor = z_scale.hard_value
+
+        z_height = self._raw_image * scaling_factor / 2 ** (8 * self._bytes_per_pixel)
 
         return z_height
 
