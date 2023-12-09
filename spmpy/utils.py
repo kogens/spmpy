@@ -10,11 +10,9 @@ RE_NUMERICAL = re.compile(r'^([+-]?\d+\.?\d*(?:[eE][+-]\d+)?)( 1?[^\d:]+)?$')
 RE_MULTIPLE_NUMERICAL = re.compile(r'^((?:(?<!\d)[+-]?\d+\.?\d*(?:[eE][+-]\d+)? )+)([^\d:]+)?$')
 RE_DATE = re.compile(r'^\d{2}:\d{2}:\d{2} (AM|PM) \D{3} \D{3} \d{1,2} \d{4}$')
 
-INTEGER_SIZE = 2 ** 16  # 16-bit ADC according to manual
-
 # Pint UnitRegistry handles physical quantities
 ureg = UnitRegistry()
-ureg.define(f'least_significant_bit  = {INTEGER_SIZE} = LSB')
+ureg.define(f'least_significant_bit  = 1 = LSB')
 ureg.define('arbitrary_units = [] = Arb')
 ureg.define('log_arbitrary_units = [] = log_Arb')
 ureg.define('log_volt = [] = log_V')
@@ -33,7 +31,7 @@ V_ref/LSB = 2^N = counts = "number of bits"
     v
 V_ref = 2^N * LSB, sometimes "hard value"
 
-LSB is the "voltage reoslution" of the ADC/DAC and represents the smallest 
+LSB is the "voltage resolution" of the ADC/DAC and represents the smallest change in voltage that can be measured.
 
 """
 
